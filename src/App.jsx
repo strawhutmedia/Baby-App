@@ -34,7 +34,13 @@ export default function App() {
   const [notes, setNotes] = useLocalStorage('fb.notes', {}) // { foodId: 'quick note' }
   const [caregivers, setCaregivers] = useLocalStorage('fb.caregivers', [])
   const [feeder, setFeeder] = useLocalStorage('fb.feeder', '')
-  const [tab, setTab] = useState('home')
+  // Invite links carry the family code: first100.baby/?join=ABC123
+  const [inviteCode] = useState(() => {
+    const c = new URLSearchParams(window.location.search).get('join')
+    if (c) window.history.replaceState(null, '', window.location.pathname)
+    return c ? c.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) : ''
+  })
+  const [tab, setTab] = useState(() => (inviteCode ? 'baby' : 'home'))
   const [openFoodId, setOpenFoodId] = useState(null)
 
   // ----- family sync (active when the app was built with VITE_API_URL) -----
@@ -241,6 +247,7 @@ export default function App() {
         canSignIn={cloud.cloudEnabled}
         onSignIn={handleSignIn}
         onJoin={handleJoinWithCode}
+        inviteCode={inviteCode}
       />
     )
   }
@@ -299,6 +306,7 @@ export default function App() {
       const { user } = await cloud.updateAccount(fields)
       setAccount((a) => a && { ...a, user })
     },
+    inviteCode,
   }
 
   return (
@@ -376,11 +384,11 @@ function TabButton({ id, icon, label, tab, setTab }) {
 
 /* ---------- Onboarding ---------- */
 
-function Onboarding({ onDone, canSignIn, onSignIn, onJoin }) {
-  const [mode, setMode] = useState('new') // 'new' | 'join' | 'signin'
+function Onboarding({ onDone, canSignIn, onSignIn, onJoin, inviteCode }) {
+  const [mode, setMode] = useState(canSignIn && inviteCode ? 'join' : 'new') // 'new' | 'join' | 'signin'
   const [name, setName] = useState('')
   const [birthdate, setBirthdate] = useState('')
-  const [code, setCode] = useState('')
+  const [code, setCode] = useState(inviteCode || '')
   const [display, setDisplay] = useState('')
   const [email, setEmail] = useState('')
   const [pw, setPw] = useState('')
@@ -1368,7 +1376,7 @@ function AddCaregiver({ onAdd }) {
 function FamilySection({
   account, emailEnabled, syncMsg,
   onSignIn, onSignOut, onCreateFamily, onJoinFamily, onRename, onToggleNotify, onTogglePush,
-  onRemoveMember, onTransfer, onLeave,
+  onRemoveMember, onTransfer, onLeave, inviteCode,
 }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -1420,6 +1428,7 @@ function FamilySection({
           err={err || syncMsg}
           onCreate={(display) => run(() => onCreateFamily(display))}
           onJoin={(code, display) => run(() => onJoinFamily(code, display))}
+          inviteCode={inviteCode}
         />
         <button className="link danger small" onClick={() => run(onSignOut)}>Sign out</button>
       </section>
@@ -1430,9 +1439,10 @@ function FamilySection({
     <section className="card family-card">
       <h2>👨‍👩‍👧 Family sync — on</h2>
       <p className="small">
-        Share this code so Mom, Dad or Grandma can join from their phone
-        (Baby tab → Family sync → Join):
+        Invite Mom, Dad or Grandma — send them this link and all they add is their name, email
+        and a password:
       </p>
+      <InviteShare code={account.family.joinCode} />
       <div className="join-code">{account.family.joinCode}</div>
       <div className="member-list">
         {account.members.map((m) => {
@@ -1544,10 +1554,10 @@ function AuthForm({ busy, err, onSubmit }) {
   )
 }
 
-function FamilySetup({ busy, err, onCreate, onJoin }) {
-  const [mode, setMode] = useState('create')
+function FamilySetup({ busy, err, onCreate, onJoin, inviteCode }) {
+  const [mode, setMode] = useState(inviteCode ? 'join' : 'create')
   const [display, setDisplay] = useState('')
-  const [code, setCode] = useState('')
+  const [code, setCode] = useState(inviteCode || '')
   return (
     <div>
       <div className="chip-row">
@@ -1585,6 +1595,42 @@ function FamilySetup({ busy, err, onCreate, onJoin }) {
           </button>
         )}
       </div>
+    </div>
+  )
+}
+
+function InviteShare({ code }) {
+  const [copied, setCopied] = useState(false)
+  const link = `${window.location.origin}/?join=${code}`
+
+  async function share() {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Join our First Bites family',
+          text: `Join our baby's first-foods checklist! Open this link and add your name and email:`,
+          url: link,
+        })
+        return
+      } catch {
+        // user closed the share sheet — fall through to copy
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(link)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    } catch {
+      window.prompt('Copy this invite link:', link)
+    }
+  }
+
+  return (
+    <div className="invite-share">
+      <span className="invite-link">{link}</span>
+      <button className="btn small-btn primary" onClick={share}>
+        {copied ? 'Copied ✓' : '📤 Share invite'}
+      </button>
     </div>
   )
 }

@@ -416,6 +416,23 @@ p { margin: 0 0 8px; line-height: 1.5; }
   padding-top: 10px;
 }
 .notify-head { font-size: 0.95rem; margin: 0 0 4px; }
+.invite-share {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--green-soft);
+  border-radius: 12px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+.invite-link {
+  flex: 1;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--green-deep);
+  word-break: break-all;
+  user-select: all;
+}
 .join-code {
   font-size: 1.7rem;
   font-weight: 800;
