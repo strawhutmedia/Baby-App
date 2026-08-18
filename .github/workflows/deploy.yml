@@ -10,9 +10,11 @@ permissions:
   pages: write
   id-token: write
 
+# Queue rapid successive deploys instead of cancelling the older one —
+# cancelled runs generate misleading "not successful" notification emails.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
