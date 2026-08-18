@@ -1112,7 +1112,7 @@ function AccountCard({ account, onUpdateAccount }) {
         Signed in as <strong>{account.user.email}</strong>
       </p>
       <p className="muted small">
-        No phone number needed — notifications arrive as free app notifications, never texts.
+        Updates arrive by email — no phone number needed, ever.
       </p>
       {!mode && (
         <div className="btn-row">
@@ -1328,37 +1328,28 @@ function FamilySection({
       )}
       <RenameSelf current={account.myName} onRename={(n) => run(() => onRename(n))} />
       <div className="notify-block">
-        <h3 className="notify-head">Notifications</h3>
-        <p className="muted small">
-          Each person chooses their own — get pinged when someone else logs a new first food, or
-          keep it quiet.
-        </p>
-        {cloud.pushSupported() ? (
-          <label className="check-field">
-            <input
-              type="checkbox"
-              checked={account.notifyPush}
-              onChange={(e) => run(() => onTogglePush(e.target.checked))}
-              disabled={busy}
-            />
-            <span>📱 Notify this phone</span>
-          </label>
+        <h3 className="notify-head">Email updates</h3>
+        {emailEnabled ? (
+          <>
+            <p className="muted small">
+              Your choice — get an email when someone else logs a new first food, with the food's
+              benefits and serving tips for {'' /* baby name lives server-side */}your baby's age.
+            </p>
+            <label className="check-field">
+              <input
+                type="checkbox"
+                checked={account.notifyEmail}
+                onChange={(e) => run(() => onToggleNotify(e.target.checked))}
+                disabled={busy}
+              />
+              <span>📬 Email me when a new food is logged</span>
+            </label>
+          </>
         ) : (
           <p className="muted small">
-            📱 Phone notifications: install the app first (Share → Add to Home Screen), then this
-            option appears here.
+            📬 Email updates are almost ready — they'll appear here as a personal on/off choice
+            once email sending is connected.
           </p>
-        )}
-        {emailEnabled && (
-          <label className="check-field">
-            <input
-              type="checkbox"
-              checked={account.notifyEmail}
-              onChange={(e) => run(() => onToggleNotify(e.target.checked))}
-              disabled={busy}
-            />
-            <span>📬 Email me</span>
-          </label>
         )}
       </div>
       {(err || syncMsg) && <p className="small" style={{ color: 'var(--red)' }}>{err || syncMsg}</p>}
