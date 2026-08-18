@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { FOODS, CATEGORIES, ALLERGENS, AGE_BANDS, bandForAgeMonths } from './data/foods.js'
 import { useLocalStorage } from './lib/storage.js'
 import { ageInMonths, formatAge, formatDate, todayISO } from './lib/age.js'
+import * as cloud from './lib/cloud.js'
 
 const RATINGS = [
   { key: 'loved', label: 'Loved it', emoji: '😍' },
@@ -24,20 +25,118 @@ const MILESTONES = [
   [1, '🎊 First food logged — the adventure begins!'],
 ]
 
+const uid = () =>
+  (window.crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`)
+
 export default function App() {
   const [profile, setProfile] = useLocalStorage('fb.profile', null)
-  const [log, setLog] = useLocalStorage('fb.log', {}) // { foodId: [{date, rating, reaction, notes}] }
+  const [log, setLog] = useLocalStorage('fb.log', {}) // { foodId: [{id, date, rating, reaction, notes, by}] }
   const [notes, setNotes] = useLocalStorage('fb.notes', {}) // { foodId: 'quick note' }
+  const [caregivers, setCaregivers] = useLocalStorage('fb.caregivers', [])
+  const [feeder, setFeeder] = useLocalStorage('fb.feeder', '')
   const [tab, setTab] = useState('home')
   const [openFoodId, setOpenFoodId] = useState(null)
 
-  const months = ageInMonths(profile?.birthdate)
-  const band = bandForAgeMonths(months)
+  // ----- family sync (only active when the app was built with Supabase keys) -----
+  const [session, setSession] = useState(null)
+  const [family, setFamily] = useState(null) // { family, members, myName }
+  const [syncMsg, setSyncMsg] = useState('')
+  const familyRef = useRef(null)
+  familyRef.current = family
 
-  function addTry(foodId, entry) {
+  useEffect(() => {
+    if (!cloud.cloudEnabled) return
+    let cancelled = false
+    cloud.getSession().then((s) => !cancelled && setSession(s))
+    const off = cloud.onAuthChange((s) => setSession(s))
+    return () => {
+      cancelled = true
+      off()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!cloud.cloudEnabled || !session) {
+      setFamily(null)
+      return
+    }
+    let cancelled = false
+    cloud
+      .getMyFamily(session.user.id)
+      .then((fam) => {
+        if (cancelled) return
+        setFamily(fam)
+        if (fam) connectFamily(fam)
+      })
+      .catch((e) => setSyncMsg(String(e.message || e)))
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session])
+
+  async function connectFamily(fam) {
+    try {
+      const remote = await cloud.fetchState(fam.family.id)
+      const syncedKey = 'fb.syncedFamily'
+      if (window.localStorage.getItem(syncedKey) !== fam.family.id) {
+        // First connection from this device: upload local history the cloud doesn't have.
+        const cloudIds = new Set(Object.values(remote.log).flat().map((e) => e.id))
+        for (const [foodId, entries] of Object.entries(log)) {
+          for (const e of entries) {
+            const entry = { ...e, id: e.id || uid() }
+            if (!cloudIds.has(entry.id)) await cloud.pushTry(fam.family.id, foodId, entry)
+          }
+        }
+        for (const [foodId, body] of Object.entries(notes)) {
+          if (!remote.notes[foodId]) await cloud.pushNote(fam.family.id, foodId, body)
+        }
+        window.localStorage.setItem(syncedKey, fam.family.id)
+        const merged = await cloud.fetchState(fam.family.id)
+        setLog(merged.log)
+        setNotes(merged.notes)
+      } else {
+        setLog(remote.log)
+        setNotes(remote.notes)
+      }
+      setProfile({ name: fam.family.baby_name, birthdate: fam.family.birthdate })
+      setSyncMsg('')
+    } catch (e) {
+      setSyncMsg(`Sync problem: ${e.message || e}`)
+    }
+  }
+
+  // Refresh from the family when the app regains focus (someone else may have logged a food).
+  useEffect(() => {
+    if (!cloud.cloudEnabled) return
+    const refresh = () => {
+      const fam = familyRef.current
+      if (fam && document.visibilityState === 'visible') {
+        cloud
+          .fetchState(fam.family.id)
+          .then(({ log: l, notes: n }) => {
+            setLog(l)
+            setNotes(n)
+          })
+          .catch(() => {})
+      }
+    }
+    document.addEventListener('visibilitychange', refresh)
+    return () => document.removeEventListener('visibilitychange', refresh)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const synced = Boolean(family)
+  const currentFeeder = synced ? family.myName : feeder
+
+  // ----- mutations (optimistic local write; push to family when synced) -----
+  function addTry(foodId, partial) {
+    const entry = { id: uid(), by: currentFeeder || '', ...partial }
     setLog((prev) => ({ ...prev, [foodId]: [...(prev[foodId] || []), entry] }))
+    if (synced) cloud.pushTry(family.family.id, foodId, entry).catch((e) => setSyncMsg(`Sync problem: ${e.message}`))
   }
   function removeTry(foodId, index) {
+    const entry = (log[foodId] || [])[index]
     setLog((prev) => {
       const next = (prev[foodId] || []).filter((_, i) => i !== index)
       const copy = { ...prev }
@@ -45,6 +144,7 @@ export default function App() {
       else copy[foodId] = next
       return copy
     })
+    if (synced && entry?.id) cloud.deleteTryById(entry.id).catch(() => {})
   }
   function checkOff(foodId) {
     addTry(foodId, { date: todayISO(), rating: null, reaction: false, notes: '' })
@@ -61,22 +161,101 @@ export default function App() {
         delete copy[foodId]
         return copy
       })
+      if (synced) cloud.deleteTriesForFood(family.family.id, foodId).catch(() => {})
     }
   }
   function setNote(foodId, text) {
+    const body = text.trim()
     setNotes((prev) => {
       const copy = { ...prev }
-      if (text.trim()) copy[foodId] = text
+      if (body) copy[foodId] = body
       else delete copy[foodId]
       return copy
     })
+    if (synced) cloud.pushNote(family.family.id, foodId, body).catch(() => {})
   }
+  function saveProfile(next) {
+    setProfile(next)
+    if (synced) {
+      cloud
+        .updateBaby(family.family.id, next.name, next.birthdate)
+        .then(() =>
+          setFamily((f) => f && { ...f, family: { ...f.family, baby_name: next.name, birthdate: next.birthdate } }),
+        )
+        .catch(() => {})
+    }
+  }
+  function importBackup(data) {
+    let added = 0
+    const nextLog = { ...log }
+    for (const [foodId, entries] of Object.entries(data.log || {})) {
+      if (!FOODS.some((f) => f.id === foodId)) continue
+      const existing = nextLog[foodId] || []
+      const ids = new Set(existing.map((e) => e.id))
+      const sig = new Set(existing.map((e) => `${e.date}|${e.rating}|${e.notes}`))
+      for (const e of entries) {
+        if (e.id && ids.has(e.id)) continue
+        if (!e.id && sig.has(`${e.date}|${e.rating}|${e.notes}`)) continue
+        const entry = { ...e, id: e.id || uid() }
+        nextLog[foodId] = [...(nextLog[foodId] || []), entry]
+        added++
+        if (synced) cloud.pushTry(family.family.id, foodId, entry).catch(() => {})
+      }
+    }
+    setLog(nextLog)
+    const nextNotes = { ...notes }
+    for (const [foodId, body] of Object.entries(data.notes || {})) {
+      if (!nextNotes[foodId] && body) {
+        nextNotes[foodId] = body
+        if (synced) cloud.pushNote(family.family.id, foodId, body).catch(() => {})
+      }
+    }
+    setNotes(nextNotes)
+    return added
+  }
+
+  const months = ageInMonths(profile?.birthdate)
+  const band = bandForAgeMonths(months)
 
   if (!profile) {
     return <Onboarding onDone={setProfile} />
   }
 
   const openFood = openFoodId ? FOODS.find((f) => f.id === openFoodId) : null
+
+  const familyProps = {
+    session,
+    family,
+    syncMsg,
+    onSignIn: async (email, password, mode) => {
+      setSyncMsg('')
+      if (mode === 'signup') await cloud.signUp(email, password)
+      await cloud.signIn(email, password)
+    },
+    onSignOut: async () => {
+      await cloud.signOut()
+      window.localStorage.removeItem('fb.syncedFamily')
+      setFamily(null)
+    },
+    onCreateFamily: async (displayName) => {
+      const fam = await cloud.createFamily(profile.name, profile.birthdate, displayName)
+      const full = await cloud.getMyFamily(session.user.id)
+      setFamily(full)
+      if (full) await connectFamily(full)
+      return fam
+    },
+    onJoinFamily: async (code, displayName) => {
+      await cloud.joinFamily(code, displayName)
+      const full = await cloud.getMyFamily(session.user.id)
+      setFamily(full)
+      if (full) await connectFamily(full)
+    },
+    onRename: async (name) => {
+      await cloud.updateMyName(family.family.id, session.user.id, name)
+      const full = await cloud.getMyFamily(session.user.id)
+      setFamily(full)
+    },
+  }
 
   return (
     <div className="app">
@@ -115,7 +294,20 @@ export default function App() {
         ) : tab === 'journal' ? (
           <Journal log={log} onOpenFood={setOpenFoodId} />
         ) : (
-          <Profile profile={profile} months={months} log={log} notes={notes} onSave={setProfile} onResetLog={() => setLog({})} />
+          <Profile
+            profile={profile}
+            months={months}
+            log={log}
+            notes={notes}
+            onSave={saveProfile}
+            onResetLog={() => setLog({})}
+            onImport={importBackup}
+            caregivers={caregivers}
+            setCaregivers={setCaregivers}
+            feeder={feeder}
+            setFeeder={setFeeder}
+            familyProps={familyProps}
+          />
         )}
       </main>
 
@@ -154,8 +346,7 @@ function Onboarding({ onDone }) {
         <h1>First Bites</h1>
         <p className="muted">
           The first 100 foods, free forever: how to serve each one safely by age, a checklist to
-          tick off every new taste, and space for your notes. Everything stays on your device — no
-          account, no subscription, ever.
+          tick off every new taste, and space for your notes. No subscription, ever.
         </p>
         <label className="field">
           <span>Baby's name</span>
@@ -596,9 +787,12 @@ function FoodDetail({ food, band, entries, note, onSetNote, onBack, onAddTry, on
           const idx = entries.length - 1 - revIdx
           const rating = RATINGS.find((r) => r.key === e.rating)
           return (
-            <div key={idx} className="card try-entry">
+            <div key={e.id || idx} className="card try-entry">
               <div className="try-head">
-                <span>{rating ? `${rating.emoji} ${rating.label}` : '✓ Tried'}</span>
+                <span>
+                  {rating ? `${rating.emoji} ${rating.label}` : '✓ Tried'}
+                  {e.by && <span className="muted small"> · by {e.by}</span>}
+                </span>
                 <span className="muted small">{formatDate(e.date)}</span>
               </div>
               {e.reaction && <div className="reaction-flag">⚠️ Possible reaction noted</div>}
@@ -694,14 +888,20 @@ function Journal({ log, onOpenFood }) {
       {entries.map((e, i) => {
         const rating = RATINGS.find((r) => r.key === e.rating)
         return (
-          <button key={i} className="card journal-entry" onClick={() => onOpenFood(e.food.id)}>
+          <button key={e.id || i} className="card journal-entry" onClick={() => onOpenFood(e.food.id)}>
             <span className="journal-emoji">{e.food.emoji}</span>
             <span className="journal-body">
               <span className="journal-title">
                 {e.food.name} {rating ? rating.emoji : '✓'}
                 {e.reaction && ' ⚠️'}
               </span>
-              {e.notes && <span className="muted small">{e.notes}</span>}
+              {(e.by || e.notes) && (
+                <span className="muted small">
+                  {e.by && `by ${e.by}`}
+                  {e.by && e.notes && ' — '}
+                  {e.notes}
+                </span>
+              )}
             </span>
             <span className="muted small">{formatDate(e.date)}</span>
           </button>
@@ -711,12 +911,18 @@ function Journal({ log, onOpenFood }) {
   )
 }
 
-/* ---------- Profile ---------- */
+/* ---------- Baby tab: profile, family, caregivers, data ---------- */
 
-function Profile({ profile, months, log, notes, onSave, onResetLog }) {
+function Profile({
+  profile, months, log, notes, onSave, onResetLog, onImport,
+  caregivers, setCaregivers, feeder, setFeeder, familyProps,
+}) {
   const [name, setName] = useState(profile.name)
   const [birthdate, setBirthdate] = useState(profile.birthdate)
   const [confirmReset, setConfirmReset] = useState(false)
+  const [importMsg, setImportMsg] = useState('')
+  const fileRef = useRef(null)
+  const synced = Boolean(familyProps.family)
 
   const dirty = name.trim() !== profile.name || birthdate !== profile.birthdate
 
@@ -731,12 +937,57 @@ function Profile({ profile, months, log, notes, onSave, onResetLog }) {
     URL.revokeObjectURL(url)
   }
 
+  function handleImportFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result)
+        const added = onImport(data)
+        setImportMsg(`Imported ✓ — ${added} new ${added === 1 ? 'entry' : 'entries'} merged in.`)
+      } catch {
+        setImportMsg('That file could not be read as a First Bites backup.')
+      }
+    }
+    reader.readAsText(file)
+    e.target.value = ''
+  }
+
   return (
     <div className="page">
       <header>
         <h1>👶 {profile.name}</h1>
         <p className="muted">{months != null ? `${formatAge(months)} old` : ''}</p>
       </header>
+
+      <FamilySection {...familyProps} />
+
+      {!synced && (
+        <section className="card">
+          <h2>Who's feeding today?</h2>
+          <p className="muted small">
+            Add the grown-ups; logged foods will show who served them.
+          </p>
+          <div className="allergen-list">
+            {caregivers.map((c) => (
+              <button
+                key={c}
+                className={`allergen-chip ${feeder === c ? 'done' : ''}`}
+                onClick={() => setFeeder(feeder === c ? '' : c)}
+              >
+                {feeder === c ? '🍽️ ' : ''}{c}
+              </button>
+            ))}
+          </div>
+          <AddCaregiver
+            onAdd={(n) => {
+              if (!caregivers.includes(n)) setCaregivers([...caregivers, n])
+              setFeeder(n)
+            }}
+          />
+        </section>
+      )}
 
       <section className="card">
         <h2>Profile</h2>
@@ -776,10 +1027,13 @@ function Profile({ profile, months, log, notes, onSave, onResetLog }) {
       <section className="card">
         <h2>Your data</h2>
         <p className="muted small">
-          Everything lives in this browser only. Export a backup before switching devices.
+          {synced
+            ? 'Synced with your family — plus local backups whenever you want one.'
+            : 'Stored in this browser only. Export a backup before switching devices, or import one from another phone to merge logs.'}
         </p>
         <div className="btn-row">
           <button className="btn" onClick={exportData}>⬇️ Export backup</button>
+          <button className="btn" onClick={() => fileRef.current?.click()}>⬆️ Import backup</button>
           {!confirmReset ? (
             <button className="btn danger-outline" onClick={() => setConfirmReset(true)}>
               Reset food log
@@ -796,6 +1050,8 @@ function Profile({ profile, months, log, notes, onSave, onResetLog }) {
             </button>
           )}
         </div>
+        <input ref={fileRef} type="file" accept="application/json" hidden onChange={handleImportFile} />
+        {importMsg && <p className="small" style={{ marginTop: 8 }}>{importMsg}</p>}
       </section>
 
       <section className="card">
@@ -811,6 +1067,217 @@ function Profile({ profile, months, log, notes, onSave, onResetLog }) {
           always quarter grapes lengthwise, and baby should always be seated upright while eating.
         </p>
       </section>
+    </div>
+  )
+}
+
+function AddCaregiver({ onAdd }) {
+  const [adding, setAdding] = useState(false)
+  const [name, setName] = useState('')
+  if (!adding) {
+    return (
+      <button className="link" onClick={() => setAdding(true)}>+ Add a caregiver</button>
+    )
+  }
+  return (
+    <div className="btn-row" style={{ alignItems: 'center' }}>
+      <input
+        className="inline-input"
+        autoFocus
+        placeholder="Dad, Mom, Grandma…"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
+      <button
+        className="btn small-btn primary"
+        disabled={!name.trim()}
+        onClick={() => {
+          onAdd(name.trim())
+          setName('')
+          setAdding(false)
+        }}
+      >
+        Add
+      </button>
+    </div>
+  )
+}
+
+/* ---------- Family sync UI ---------- */
+
+function FamilySection({ session, family, syncMsg, onSignIn, onSignOut, onCreateFamily, onJoinFamily, onRename }) {
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  async function run(fn) {
+    setBusy(true)
+    setErr('')
+    try {
+      await fn()
+    } catch (e) {
+      setErr(e.message || String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!cloud.cloudEnabled) {
+    return (
+      <section className="card">
+        <h2>👨‍👩‍👧 Family sync</h2>
+        <p className="small">
+          Right now this device keeps its own log. To let Mom, Dad and Grandma all log foods from
+          their own phones into one shared list, the site needs to be connected to a free Supabase
+          database — a 10-minute, $0 setup described in the project README. Once connected, this
+          section becomes sign-in, and a 6-letter family code invites everyone else.
+        </p>
+      </section>
+    )
+  }
+
+  if (!session) {
+    return (
+      <section className="card">
+        <h2>👨‍👩‍👧 Family sync</h2>
+        <p className="muted small">
+          Sign in so everyone in the family sees the same checklist from their own phone.
+        </p>
+        <AuthForm busy={busy} err={err || syncMsg} onSubmit={(email, pw, mode) => run(() => onSignIn(email, pw, mode))} />
+      </section>
+    )
+  }
+
+  if (!family) {
+    return (
+      <section className="card">
+        <h2>👨‍👩‍👧 Family sync</h2>
+        <p className="muted small">Signed in as {session.user.email}</p>
+        <FamilySetup
+          busy={busy}
+          err={err || syncMsg}
+          onCreate={(display) => run(() => onCreateFamily(display))}
+          onJoin={(code, display) => run(() => onJoinFamily(code, display))}
+        />
+        <button className="link danger small" onClick={() => run(onSignOut)}>Sign out</button>
+      </section>
+    )
+  }
+
+  return (
+    <section className="card family-card">
+      <h2>👨‍👩‍👧 Family sync — on</h2>
+      <p className="small">
+        Share this code so Mom, Dad or Grandma can join from their phone
+        (Baby tab → Family sync → Join):
+      </p>
+      <div className="join-code">{family.family.join_code}</div>
+      <p className="muted small" style={{ marginTop: 8 }}>
+        In the family: {family.members.map((m) => m.display_name).join(', ')}
+      </p>
+      <RenameSelf current={family.myName} onRename={(n) => run(() => onRename(n))} />
+      {(err || syncMsg) && <p className="small" style={{ color: 'var(--red)' }}>{err || syncMsg}</p>}
+      <button className="link danger small" onClick={() => run(onSignOut)} disabled={busy}>
+        Sign out on this device
+      </button>
+    </section>
+  )
+}
+
+function AuthForm({ busy, err, onSubmit }) {
+  const [email, setEmail] = useState('')
+  const [pw, setPw] = useState('')
+  return (
+    <div>
+      <label className="field">
+        <span>Email</span>
+        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+      </label>
+      <label className="field">
+        <span>Password</span>
+        <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="at least 6 characters" />
+      </label>
+      {err && <p className="small" style={{ color: 'var(--red)' }}>{err}</p>}
+      <div className="btn-row">
+        <button className="btn primary" disabled={busy || !email || pw.length < 6} onClick={() => onSubmit(email, pw, 'signin')}>
+          Sign in
+        </button>
+        <button className="btn" disabled={busy || !email || pw.length < 6} onClick={() => onSubmit(email, pw, 'signup')}>
+          Create account
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function FamilySetup({ busy, err, onCreate, onJoin }) {
+  const [mode, setMode] = useState('create')
+  const [display, setDisplay] = useState('')
+  const [code, setCode] = useState('')
+  return (
+    <div>
+      <div className="chip-row">
+        <Chip active={mode === 'create'} onClick={() => setMode('create')}>Start our family</Chip>
+        <Chip active={mode === 'join'} onClick={() => setMode('join')}>Join with a code</Chip>
+      </div>
+      <label className="field">
+        <span>Your name (how the family sees you)</span>
+        <input value={display} onChange={(e) => setDisplay(e.target.value)} placeholder="Dad, Mom, Grandma…" />
+      </label>
+      {mode === 'join' && (
+        <label className="field">
+          <span>Family code</span>
+          <input
+            value={code}
+            onChange={(e) => setCode(e.target.value.toUpperCase())}
+            placeholder="6-letter code"
+            maxLength={6}
+          />
+        </label>
+      )}
+      {err && <p className="small" style={{ color: 'var(--red)' }}>{err}</p>}
+      <div className="btn-row">
+        {mode === 'create' ? (
+          <button className="btn primary" disabled={busy || !display.trim()} onClick={() => onCreate(display.trim())}>
+            Create family
+          </button>
+        ) : (
+          <button
+            className="btn primary"
+            disabled={busy || !display.trim() || code.length !== 6}
+            onClick={() => onJoin(code, display.trim())}
+          >
+            Join family
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function RenameSelf({ current, onRename }) {
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState(current)
+  if (!editing) {
+    return (
+      <p className="small">
+        You appear as <strong>{current}</strong>{' '}
+        <button className="link small" onClick={() => setEditing(true)}>change</button>
+      </p>
+    )
+  }
+  return (
+    <div className="btn-row" style={{ alignItems: 'center' }}>
+      <input className="inline-input" value={name} onChange={(e) => setName(e.target.value)} />
+      <button
+        className="btn small-btn primary"
+        disabled={!name.trim()}
+        onClick={() => {
+          onRename(name.trim())
+          setEditing(false)
+        }}
+      >
+        Save
+      </button>
     </div>
   )
 }
