@@ -1,8 +1,10 @@
 name: Deploy to GitHub Pages
 
+# Deploys run from main only — development-branch pushes are blocked by the
+# github-pages environment anyway and each blocked twin run emailed a failure.
 on:
   push:
-    branches: [main, claude/baby-food-tracking-app-7zihd0]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
