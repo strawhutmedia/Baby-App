@@ -67,6 +67,13 @@ create table if not exists food_notes (
 );
 `)
 
+// Migration for databases created before roles existed.
+try {
+  db.exec(`alter table members add column role text not null default 'member'`)
+} catch {
+  // column already exists
+}
+
 // ---------- helpers ----------
 const uid = () => crypto.randomUUID()
 
@@ -91,23 +98,26 @@ function makeJoinCode() {
 function memberOf(userId) {
   return db
     .prepare(
-      `select m.family_id, m.display_name, m.notify_email, f.join_code, f.baby_name, f.birthdate
+      `select m.family_id, m.display_name, m.notify_email, m.role, f.join_code, f.baby_name, f.birthdate
        from members m join families f on f.id = m.family_id where m.user_id = ?`,
     )
     .get(userId)
 }
 function familyPayload(userId) {
   const m = memberOf(userId)
-  if (!m) return { family: null, members: [], myName: null, notifyEmail: false }
+  if (!m) return { family: null, members: [], myName: null, notifyEmail: false, myRole: null }
   const members = db
-    .prepare('select display_name as displayName, notify_email as notifyEmail from members where family_id = ?')
+    .prepare(
+      'select user_id as userId, display_name as displayName, notify_email as notifyEmail, role from members where family_id = ? order by role desc, display_name',
+    )
     .all(m.family_id)
-    .map((x) => ({ displayName: x.displayName, notifyEmail: Boolean(x.notifyEmail) }))
+    .map((x) => ({ userId: x.userId, displayName: x.displayName, notifyEmail: Boolean(x.notifyEmail), role: x.role }))
   return {
     family: { id: m.family_id, joinCode: m.join_code, babyName: m.baby_name, birthdate: m.birthdate },
     members,
     myName: m.display_name,
     notifyEmail: Boolean(m.notify_email),
+    myRole: m.role,
   }
 }
 
@@ -229,7 +239,42 @@ app.post('/api/family', auth, (req, res) => {
     babyName,
     birthdate,
   )
-  db.prepare('insert into members (family_id, user_id, display_name) values (?, ?, ?)').run(id, req.userId, displayName)
+  db.prepare("insert into members (family_id, user_id, display_name, role) values (?, ?, ?, 'owner')").run(
+    id,
+    req.userId,
+    displayName,
+  )
+  res.json(familyPayload(req.userId))
+})
+
+// Owner: remove a member (not yourself — transfer or delete-family flows handle that).
+app.post('/api/members/remove', auth, requireFamily, (req, res) => {
+  const me = memberOf(req.userId)
+  if (me.role !== 'owner') return res.status(403).json({ error: 'Only the family owner can remove members' })
+  const target = String(req.body.userId || '')
+  if (target === req.userId) return res.status(400).json({ error: 'You can\'t remove yourself — transfer ownership first' })
+  db.prepare('delete from members where family_id = ? and user_id = ?').run(req.familyId, target)
+  res.json(familyPayload(req.userId))
+})
+
+// Owner: hand the family to another member.
+app.post('/api/family/transfer', auth, requireFamily, (req, res) => {
+  const me = memberOf(req.userId)
+  if (me.role !== 'owner') return res.status(403).json({ error: 'Only the family owner can transfer ownership' })
+  const target = String(req.body.userId || '')
+  const exists = db.prepare('select 1 from members where family_id = ? and user_id = ?').get(req.familyId, target)
+  if (!exists) return res.status(404).json({ error: 'That person isn\'t in the family' })
+  db.prepare("update members set role = 'member' where family_id = ? and user_id = ?").run(req.familyId, req.userId)
+  db.prepare("update members set role = 'owner' where family_id = ? and user_id = ?").run(req.familyId, target)
+  res.json(familyPayload(req.userId))
+})
+
+// Any non-owner member can leave on their own.
+app.post('/api/members/leave', auth, requireFamily, (req, res) => {
+  const me = memberOf(req.userId)
+  if (me.role === 'owner')
+    return res.status(400).json({ error: 'Owners must transfer ownership before leaving' })
+  db.prepare('delete from members where family_id = ? and user_id = ?').run(req.familyId, req.userId)
   res.json(familyPayload(req.userId))
 })
 

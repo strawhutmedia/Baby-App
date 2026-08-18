@@ -105,7 +105,10 @@ export default function App() {
             setLog(l)
             setNotes(n)
           })
-          .catch(() => {})
+          .catch(() => {
+            // Possibly removed from the family — re-check who we are.
+            cloud.getMe().then(setAccount).catch(() => {})
+          })
       }
     }
     document.addEventListener('visibilitychange', refresh)
@@ -244,6 +247,20 @@ export default function App() {
     onToggleNotify: async (value) => {
       const payload = await cloud.updateMe({ notifyEmail: value })
       setAccount((a) => a && { ...a, ...payload })
+    },
+    onRemoveMember: async (userId) => {
+      const payload = await cloud.removeMember(userId)
+      setAccount((a) => a && { ...a, ...payload })
+    },
+    onTransfer: async (userId) => {
+      const payload = await cloud.transferOwnership(userId)
+      setAccount((a) => a && { ...a, ...payload })
+    },
+    onLeave: async () => {
+      await cloud.leaveFamily()
+      window.localStorage.removeItem('fb.syncedFamily')
+      const me = await cloud.getMe()
+      setAccount(me)
     },
   }
 
@@ -1082,6 +1099,7 @@ function AddCaregiver({ onAdd }) {
 function FamilySection({
   account, emailEnabled, syncMsg,
   onSignIn, onSignOut, onCreateFamily, onJoinFamily, onRename, onToggleNotify,
+  onRemoveMember, onTransfer, onLeave,
 }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -1147,9 +1165,56 @@ function FamilySection({
         (Baby tab → Family sync → Join):
       </p>
       <div className="join-code">{account.family.joinCode}</div>
-      <p className="muted small" style={{ marginTop: 8 }}>
-        In the family: {account.members.map((m) => m.displayName).join(', ')}
-      </p>
+      <div className="member-list">
+        {account.members.map((m) => {
+          const isMe = m.userId === account.user.id
+          return (
+            <div key={m.userId} className="member-row">
+              <span className="member-name">
+                {m.displayName}
+                {m.role === 'owner' && <span className="tag owner-tag">owner</span>}
+                {isMe && <span className="muted small"> (you)</span>}
+              </span>
+              {account.myRole === 'owner' && !isMe && (
+                <span className="member-actions">
+                  <button
+                    className="link small"
+                    disabled={busy}
+                    onClick={() => {
+                      if (window.confirm(`Make ${m.displayName} the family owner? You'll become a regular member.`))
+                        run(() => onTransfer(m.userId))
+                    }}
+                  >
+                    Make owner
+                  </button>
+                  <button
+                    className="link danger small"
+                    disabled={busy}
+                    onClick={() => {
+                      if (window.confirm(`Remove ${m.displayName} from the family? Their phone goes back to its own local log.`))
+                        run(() => onRemoveMember(m.userId))
+                    }}
+                  >
+                    Remove
+                  </button>
+                </span>
+              )}
+            </div>
+          )
+        })}
+      </div>
+      {account.myRole !== 'owner' && (
+        <button
+          className="link danger small"
+          disabled={busy}
+          onClick={() => {
+            if (window.confirm('Leave this family? Your phone goes back to its own local log.'))
+              run(onLeave)
+          }}
+        >
+          Leave family
+        </button>
+      )}
       <RenameSelf current={account.myName} onRename={(n) => run(() => onRename(n))} />
       {emailEnabled && (
         <label className="check-field">

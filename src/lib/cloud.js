@@ -1,6 +1,7 @@
 // Family-sync client for the First Bites server (server/ in this repo,
 // deployed on Railway). Without VITE_API_URL the app runs fully on-device.
-const API = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+// Default: the family's Railway server. VITE_API_URL overrides for local dev/testing.
+const API = (import.meta.env.VITE_API_URL || 'https://first-100-production-552d.up.railway.app').replace(/\/$/, '')
 
 export const cloudEnabled = Boolean(API)
 
@@ -71,6 +72,12 @@ export const createFamily = (babyName, birthdate, displayName) =>
 export const joinFamily = (code, displayName) => call('POST', '/api/family/join', { code, displayName })
 
 export const updateMe = (fields) => call('PUT', '/api/me', fields)
+
+export const removeMember = (userId) => call('POST', '/api/members/remove', { userId })
+
+export const transferOwnership = (userId) => call('POST', '/api/family/transfer', { userId })
+
+export const leaveFamily = () => call('POST', '/api/members/leave')
 
 export const updateBaby = (name, birthdate) => call('PUT', '/api/baby', { name, birthdate })
 
