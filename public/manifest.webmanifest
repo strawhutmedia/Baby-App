@@ -1,0 +1,17 @@
+{
+  "name": "First Bites — Baby's First Foods",
+  "short_name": "First Bites",
+  "description": "Free baby-led weaning food guide and first-foods tracker",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#faf7f2",
+  "theme_color": "#2f6b4f",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
