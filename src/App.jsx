@@ -266,6 +266,10 @@ export default function App() {
       const me = await cloud.getMe()
       setAccount(me)
     },
+    onUpdateAccount: async (fields) => {
+      const { user } = await cloud.updateAccount(fields)
+      setAccount((a) => a && { ...a, user })
+    },
   }
 
   return (
@@ -958,6 +962,10 @@ function Profile({
 
       <FamilySection {...familyProps} />
 
+      {familyProps.account && (
+        <AccountCard account={familyProps.account} onUpdateAccount={familyProps.onUpdateAccount} />
+      )}
+
       {!synced && (
         <section className="card">
           <h2>Who's feeding today?</h2>
@@ -1063,6 +1071,105 @@ function Profile({
         </p>
       </section>
     </div>
+  )
+}
+
+function AccountCard({ account, onUpdateAccount }) {
+  const [mode, setMode] = useState(null) // null | 'email' | 'password'
+  const [email, setEmail] = useState('')
+  const [current, setCurrent] = useState('')
+  const [next, setNext] = useState('')
+  const [msg, setMsg] = useState('')
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  function reset(message = '') {
+    setMode(null)
+    setEmail('')
+    setCurrent('')
+    setNext('')
+    setErr('')
+    setMsg(message)
+  }
+
+  async function submit(fields, doneMsg) {
+    setBusy(true)
+    setErr('')
+    try {
+      await onUpdateAccount(fields)
+      reset(doneMsg)
+    } catch (e) {
+      setErr(e.message || String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="card">
+      <h2>🔑 Your account</h2>
+      <p className="small">
+        Signed in as <strong>{account.user.email}</strong>
+      </p>
+      <p className="muted small">
+        No phone number needed — notifications arrive as free app notifications, never texts.
+      </p>
+      {!mode && (
+        <div className="btn-row">
+          <button className="btn small-btn" onClick={() => { setMode('email'); setMsg('') }}>Change email</button>
+          <button className="btn small-btn" onClick={() => { setMode('password'); setMsg('') }}>Change password</button>
+        </div>
+      )}
+      {mode === 'email' && (
+        <div>
+          <label className="field">
+            <span>New email</span>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="new@email.com" />
+          </label>
+          <label className="field">
+            <span>Current password</span>
+            <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} />
+          </label>
+          {err && <p className="small" style={{ color: 'var(--red)' }}>{err}</p>}
+          <div className="btn-row">
+            <button className="btn small-btn" onClick={() => reset()}>Cancel</button>
+            <button
+              className="btn small-btn primary"
+              disabled={busy || !email || !current}
+              onClick={() => submit({ email, currentPassword: current }, 'Email updated ✓')}
+            >
+              Save email
+            </button>
+          </div>
+        </div>
+      )}
+      {mode === 'password' && (
+        <div>
+          <label className="field">
+            <span>Current password</span>
+            <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} />
+          </label>
+          <label className="field">
+            <span>New password</span>
+            <input type="password" value={next} onChange={(e) => setNext(e.target.value)} placeholder="at least 6 characters" />
+          </label>
+          {err && <p className="small" style={{ color: 'var(--red)' }}>{err}</p>}
+          <div className="btn-row">
+            <button className="btn small-btn" onClick={() => reset()}>Cancel</button>
+            <button
+              className="btn small-btn primary"
+              disabled={busy || !current || next.length < 6}
+              onClick={() =>
+                submit({ currentPassword: current, newPassword: next }, 'Password updated ✓ — other devices were signed out')
+              }
+            >
+              Save password
+            </button>
+          </div>
+        </div>
+      )}
+      {msg && <p className="small" style={{ color: 'var(--green)' }}>{msg}</p>}
+    </section>
   )
 }
 

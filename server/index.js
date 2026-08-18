@@ -276,6 +276,30 @@ app.put('/api/me', auth, requireFamily, (req, res) => {
   res.json(familyPayload(req.userId))
 })
 
+// Change sign-in email and/or password. Requires the current password.
+app.put('/api/account', auth, (req, res) => {
+  const user = db.prepare('select * from users where id = ?').get(req.userId)
+  const current = String(req.body.currentPassword || '')
+  if (!current || !verifyPassword(current, user.pass_hash))
+    return res.status(401).json({ error: 'Current password is wrong' })
+  if (req.body.email !== undefined) {
+    const email = String(req.body.email || '').trim().toLowerCase()
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: 'That email doesn\'t look right' })
+    const taken = db.prepare('select 1 from users where email = ? and id != ?').get(email, req.userId)
+    if (taken) return res.status(400).json({ error: 'That email is already used by another account' })
+    db.prepare('update users set email = ? where id = ?').run(email, req.userId)
+  }
+  if (req.body.newPassword !== undefined) {
+    const next = String(req.body.newPassword || '')
+    if (next.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters' })
+    db.prepare('update users set pass_hash = ? where id = ?').run(hashPassword(next), req.userId)
+    // Sign out every other device; this session stays valid.
+    db.prepare('delete from sessions where user_id = ? and token != ?').run(req.userId, req.token)
+  }
+  const updated = db.prepare('select id, email from users where id = ?').get(req.userId)
+  res.json({ user: updated })
+})
+
 app.get('/api/push/key', (_req, res) => res.json({ publicKey: vapid.publicKey }))
 
 app.post('/api/push/subscribe', auth, (req, res) => {

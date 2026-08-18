@@ -73,6 +73,8 @@ export const joinFamily = (code, displayName) => call('POST', '/api/family/join'
 
 export const updateMe = (fields) => call('PUT', '/api/me', fields)
 
+export const updateAccount = (fields) => call('PUT', '/api/account', fields)
+
 export const removeMember = (userId) => call('POST', '/api/members/remove', { userId })
 
 export const transferOwnership = (userId) => call('POST', '/api/family/transfer', { userId })
