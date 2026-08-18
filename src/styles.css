@@ -490,6 +490,34 @@ p { margin: 0 0 8px; line-height: 1.5; }
   text-align: center;
 }
 .onboard-card .field { text-align: left; }
+.join-cta {
+  width: 100%;
+  border: 2px solid var(--green);
+  color: var(--green);
+  font-weight: 800;
+  margin-top: 6px;
+}
+.onboard-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin: 14px 0 2px;
+}
+.onboard-divider::before,
+.onboard-divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--border);
+}
+.code-input {
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  font-weight: 800;
+  text-align: center;
+  font-size: 1.15rem !important;
+}
 .onboard-logo { font-size: 3rem; animation: bob 2.4s ease-in-out infinite; display: inline-block; }
 .onboard h1 { font-size: 1.7rem; margin: 6px 0 8px; }
 

@@ -215,8 +215,34 @@ export default function App() {
     return me
   }
 
+  // One-step join for invited family members: account + family code together.
+  async function handleJoinWithCode(code, displayName, email, password) {
+    setSyncMsg('')
+    try {
+      await cloud.signUp(email, password)
+    } catch (e) {
+      if (String(e.message).includes('already has an account')) await cloud.signIn(email, password)
+      else throw e
+    }
+    let me = await cloud.getMe()
+    if (!me.family) {
+      await cloud.joinFamily(code, displayName)
+      me = await cloud.getMe()
+    }
+    setAccount(me)
+    if (me?.family) await connectFamily(me)
+    return me
+  }
+
   if (!profile) {
-    return <Onboarding onDone={setProfile} canSignIn={cloud.cloudEnabled} onSignIn={handleSignIn} />
+    return (
+      <Onboarding
+        onDone={setProfile}
+        canSignIn={cloud.cloudEnabled}
+        onSignIn={handleSignIn}
+        onJoin={handleJoinWithCode}
+      />
+    )
   }
 
   const openFood = openFoodId ? FOODS.find((f) => f.id === openFoodId) : null
@@ -350,27 +376,33 @@ function TabButton({ id, icon, label, tab, setTab }) {
 
 /* ---------- Onboarding ---------- */
 
-function Onboarding({ onDone, canSignIn, onSignIn }) {
+function Onboarding({ onDone, canSignIn, onSignIn, onJoin }) {
+  const [mode, setMode] = useState('new') // 'new' | 'join' | 'signin'
   const [name, setName] = useState('')
   const [birthdate, setBirthdate] = useState('')
-  const [signingIn, setSigningIn] = useState(false)
+  const [code, setCode] = useState('')
+  const [display, setDisplay] = useState('')
   const [email, setEmail] = useState('')
   const [pw, setPw] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [notice, setNotice] = useState('')
 
-  async function submitSignIn() {
+  function switchMode(m) {
+    setMode(m)
+    setErr('')
+  }
+
+  async function run(fn, noFamilyNotice) {
     setBusy(true)
     setErr('')
     try {
-      const me = await onSignIn(email, pw, 'signin')
+      const me = await fn()
       if (me && !me.family) {
-        // Signed in, but this account has no family yet — finish setup below.
-        setSigningIn(false)
-        setNotice('Signed in! Now set up your baby below, then start or join the family from the Baby tab.')
+        switchMode('new')
+        setNotice(noFamilyNotice)
       }
-      // With a family, the profile arrives automatically and this screen closes.
+      // With a family, the baby profile arrives automatically and this screen closes.
     } catch (e) {
       setErr(e.message || String(e))
     } finally {
@@ -383,13 +415,20 @@ function Onboarding({ onDone, canSignIn, onSignIn }) {
       <div className="onboard-card page">
         <div className="onboard-logo">🥣</div>
         <h1>First Bites</h1>
-        {!signingIn ? (
+
+        {mode === 'new' && (
           <>
             <p className="muted">
               The first 100 foods, free forever: how to serve each one safely by age, a checklist
               to tick off every new taste, and space for your notes. No subscription, ever.
             </p>
             {notice && <p className="small" style={{ color: 'var(--green)' }}>{notice}</p>}
+            {canSignIn && (
+              <button className="btn big join-cta" onClick={() => switchMode('join')}>
+                👨‍👩‍👧 Have a family code? Join your family
+              </button>
+            )}
+            <div className="onboard-divider"><span>or start fresh</span></div>
             <label className="field">
               <span>Baby's name</span>
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Juniper" />
@@ -405,14 +444,64 @@ function Onboarding({ onDone, canSignIn, onSignIn }) {
             >
               Let's eat! 🎉
             </button>
-            {canSignIn && !notice && (
+            {canSignIn && (
               <p className="small" style={{ marginTop: 14 }}>
-                Already in the family?{' '}
-                <button className="link" onClick={() => setSigningIn(true)}>Sign in</button>
+                Already have an account?{' '}
+                <button className="link" onClick={() => switchMode('signin')}>Sign in</button>
               </p>
             )}
           </>
-        ) : (
+        )}
+
+        {mode === 'join' && (
+          <>
+            <p className="muted">
+              Enter the code you were sent, pick how the family sees you, and choose a login —
+              all in one go.
+            </p>
+            <label className="field">
+              <span>Family code</span>
+              <input
+                className="code-input"
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                placeholder="6-LETTER CODE"
+                maxLength={6}
+                autoCapitalize="characters"
+              />
+            </label>
+            <label className="field">
+              <span>Your name (how the family sees you)</span>
+              <input value={display} onChange={(e) => setDisplay(e.target.value)} placeholder="Mom, Dad, Grandma…" />
+            </label>
+            <label className="field">
+              <span>Email</span>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+            </label>
+            <label className="field">
+              <span>Password (at least 6 characters)</span>
+              <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} />
+            </label>
+            {err && <p className="small" style={{ color: 'var(--red)' }}>{err}</p>}
+            <button
+              className="btn primary big"
+              disabled={busy || code.length !== 6 || !display.trim() || !email || pw.length < 6}
+              onClick={() =>
+                run(
+                  () => onJoin(code, display.trim(), email, pw),
+                  'Account ready, but that code didn\'t come with a family — double-check it, or set up your baby below.',
+                )
+              }
+            >
+              {busy ? 'Joining…' : 'Join the family 🎉'}
+            </button>
+            <p className="small" style={{ marginTop: 14 }}>
+              <button className="link" onClick={() => switchMode('new')}>← Back</button>
+            </p>
+          </>
+        )}
+
+        {mode === 'signin' && (
           <>
             <p className="muted">
               Welcome back! Sign in and your family's checklist appears right where you left it.
@@ -429,18 +518,21 @@ function Onboarding({ onDone, canSignIn, onSignIn }) {
             <button
               className="btn primary big"
               disabled={busy || !email || pw.length < 6}
-              onClick={submitSignIn}
+              onClick={() =>
+                run(
+                  () => onSignIn(email, pw, 'signin'),
+                  'Signed in! Now set up your baby below, then start or join the family from the Baby tab.',
+                )
+              }
             >
               {busy ? 'Signing in…' : 'Sign in'}
             </button>
             <p className="small" style={{ marginTop: 14 }}>
-              New here?{' '}
-              <button className="link" onClick={() => { setSigningIn(false); setErr('') }}>
-                Set up your baby instead
-              </button>
+              <button className="link" onClick={() => switchMode('new')}>← Back</button>
             </p>
           </>
         )}
+
         <p className="fineprint">
           General information only, not medical advice. Always supervise eating, and talk to your
           pediatrician about starting solids and introducing allergens — especially if your baby
