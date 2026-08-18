@@ -20,6 +20,9 @@ fs.mkdirSync(DATA_DIR, { recursive: true })
 const db = new Database(path.join(DATA_DIR, 'first-bites.db'))
 db.pragma('journal_mode = WAL')
 db.pragma('foreign_keys = ON')
+// During deploys the outgoing and incoming server briefly share the database;
+// wait for locks instead of crashing the boot.
+db.pragma('busy_timeout = 10000')
 
 db.exec(`
 create table if not exists users (
