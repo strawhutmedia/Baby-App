@@ -75,6 +75,10 @@ export const updateMe = (fields) => call('PUT', '/api/me', fields)
 
 export const updateAccount = (fields) => call('PUT', '/api/account', fields)
 
+export const connectEmail = (apiKey, from) => call('PUT', '/api/admin/email', { apiKey, from })
+
+export const sendTestEmail = () => call('POST', '/api/admin/email/test')
+
 export const removeMember = (userId) => call('POST', '/api/members/remove', { userId })
 
 export const transferOwnership = (userId) => call('POST', '/api/family/transfer', { userId })

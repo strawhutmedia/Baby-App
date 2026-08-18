@@ -306,6 +306,11 @@ export default function App() {
       const { user } = await cloud.updateAccount(fields)
       setAccount((a) => a && { ...a, user })
     },
+    onConnectEmail: async (apiKey, from) => {
+      await cloud.connectEmail(apiKey, from)
+      setEmailEnabled(true)
+    },
+    onTestEmail: () => cloud.sendTestEmail(),
     inviteCode,
   }
 
@@ -1376,7 +1381,7 @@ function AddCaregiver({ onAdd }) {
 function FamilySection({
   account, emailEnabled, syncMsg,
   onSignIn, onSignOut, onCreateFamily, onJoinFamily, onRename, onToggleNotify, onTogglePush,
-  onRemoveMember, onTransfer, onLeave, inviteCode,
+  onRemoveMember, onTransfer, onLeave, inviteCode, onConnectEmail, onTestEmail,
 }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -1501,7 +1506,7 @@ function FamilySection({
           <>
             <p className="muted small">
               Your choice — get an email when someone else logs a new first food, with the food's
-              benefits and serving tips for {'' /* baby name lives server-side */}your baby's age.
+              benefits and serving tips for your baby's age.
             </p>
             <label className="check-field">
               <input
@@ -1512,11 +1517,14 @@ function FamilySection({
               />
               <span>📬 Email me when a new food is logged</span>
             </label>
+            {account.myRole === 'owner' && <TestEmailButton onTestEmail={onTestEmail} />}
           </>
+        ) : account.myRole === 'owner' ? (
+          <ConnectEmail onConnect={onConnectEmail} />
         ) : (
           <p className="muted small">
-            📬 Email updates are almost ready — they'll appear here as a personal on/off choice
-            once email sending is connected.
+            📬 Email updates appear here as a personal on/off choice once the family owner
+            connects email sending.
           </p>
         )}
       </div>
@@ -1595,6 +1603,87 @@ function FamilySetup({ busy, err, onCreate, onJoin, inviteCode }) {
           </button>
         )}
       </div>
+    </div>
+  )
+}
+
+function ConnectEmail({ onConnect }) {
+  const [open, setOpen] = useState(false)
+  const [key, setKey] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  if (!open) {
+    return (
+      <div>
+        <p className="muted small">
+          📬 Get an email whenever someone logs a new first food. One-time setup: create a free
+          account at <strong>resend.com</strong>, make an API key, and paste it here.
+        </p>
+        <button className="btn small-btn primary" onClick={() => setOpen(true)}>Connect email updates</button>
+      </div>
+    )
+  }
+  return (
+    <div>
+      <label className="field">
+        <span>Resend API key (starts with re_)</span>
+        <input
+          value={key}
+          onChange={(e) => setKey(e.target.value.trim())}
+          placeholder="re_…"
+          autoComplete="off"
+        />
+      </label>
+      {err && <p className="small" style={{ color: 'var(--red)' }}>{err}</p>}
+      <div className="btn-row">
+        <button className="btn small-btn" onClick={() => setOpen(false)}>Cancel</button>
+        <button
+          className="btn small-btn primary"
+          disabled={busy || !key.startsWith('re_')}
+          onClick={async () => {
+            setBusy(true)
+            setErr('')
+            try {
+              await onConnect(key)
+            } catch (e) {
+              setErr(e.message || String(e))
+            } finally {
+              setBusy(false)
+            }
+          }}
+        >
+          {busy ? 'Connecting…' : 'Save & connect'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function TestEmailButton({ onTestEmail }) {
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  return (
+    <div style={{ marginTop: 6 }}>
+      <button
+        className="btn small-btn"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true)
+          setMsg('')
+          try {
+            const r = await onTestEmail()
+            setMsg(`Test sent to ${r.sentTo} ✓ — check your inbox (and spam, the first time).`)
+          } catch (e) {
+            setMsg(`Problem: ${e.message}`)
+          } finally {
+            setBusy(false)
+          }
+        }}
+      >
+        {busy ? 'Sending…' : '✉️ Send me a test email'}
+      </button>
+      {msg && <p className="small" style={{ marginTop: 6 }}>{msg}</p>}
     </div>
   )
 }

@@ -11,10 +11,7 @@ import path from 'node:path'
 
 const PORT = process.env.PORT || 3001
 const DATA_DIR = process.env.DATA_DIR || './data'
-const RESEND_API_KEY = process.env.RESEND_API_KEY || ''
-const EMAIL_FROM = process.env.EMAIL_FROM || 'First Bites <onboarding@resend.dev>'
 const APP_URL = process.env.APP_URL || 'https://first100.baby'
-const emailEnabled = Boolean(RESEND_API_KEY)
 
 fs.mkdirSync(DATA_DIR, { recursive: true })
 const db = new Database(path.join(DATA_DIR, 'first-bites.db'))
@@ -90,7 +87,20 @@ create table if not exists push_subs (
   sub_json text not null,
   created_at text not null default (datetime('now'))
 );
+create table if not exists app_config (
+  k text primary key,
+  v text not null
+);
 `)
+
+// Email config lives in the database (set by a family owner in the app) with
+// environment variables as fallback.
+const getCfg = (k) => db.prepare('select v from app_config where k = ?').get(k)?.v
+const setCfg = (k, v) =>
+  db.prepare('insert into app_config (k, v) values (?, ?) on conflict(k) do update set v=excluded.v').run(k, v)
+const resendKey = () => getCfg('resend_key') || process.env.RESEND_API_KEY || ''
+const emailFrom = () => getCfg('email_from') || process.env.EMAIL_FROM || 'First Bites <updates@first100.baby>'
+const emailEnabled = () => Boolean(resendKey())
 
 // Web push (free, no third-party account): VAPID keys are generated once and
 // persisted next to the database so subscriptions survive restarts.
@@ -152,21 +162,30 @@ function familyPayload(userId) {
   }
 }
 
+// Returns { ok, message } so callers (like the in-app test button) can surface
+// Resend's actual error — e.g. "domain not verified".
 async function sendEmail(to, subject, text, html) {
   if (process.env.EMAIL_DEBUG_FILE) {
     // Testing hook: capture instead of sending.
     fs.appendFileSync(process.env.EMAIL_DEBUG_FILE, JSON.stringify({ to, subject, text, html }) + '\n')
-    return
+    return { ok: true, message: 'debug capture' }
   }
-  if (!emailEnabled) return
+  if (!emailEnabled()) return { ok: false, message: 'Email is not connected yet' }
   try {
-    await fetch('https://api.resend.com/emails', {
+    const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: EMAIL_FROM, to: [to], subject, text, ...(html ? { html } : {}) }),
+      headers: { Authorization: `Bearer ${resendKey()}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: emailFrom(), to: [to], subject, text, ...(html ? { html } : {}) }),
     })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      console.error('email send failed:', res.status, body?.message)
+      return { ok: false, message: body?.message || `Resend returned ${res.status}` }
+    }
+    return { ok: true, message: 'sent' }
   } catch (e) {
     console.error('email send failed:', e.message)
+    return { ok: false, message: e.message }
   }
 }
 
@@ -228,7 +247,7 @@ function notifyFamily(familyId, actorUserId, t) {
   const fam = db.prepare('select baby_name, birthdate from families where id = ?').get(familyId)
   const food = FOODS[t.foodId] || { name: t.foodId, emoji: '🥣', nutrition: '', serve: {}, allergen: null }
   const who = t.by || 'Someone'
-  if (emailEnabled) {
+  if (emailEnabled()) {
     const { subject, text, html } = buildEmail(fam, food, t)
     const rows = db
       .prepare(
@@ -281,7 +300,40 @@ function requireFamily(req, res, next) {
 }
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }))
-app.get('/api/config', (_req, res) => res.json({ emailEnabled }))
+app.get('/api/config', (_req, res) => res.json({ emailEnabled: emailEnabled() }))
+
+// Family owner connects the Resend key from inside the app — no dashboard digging.
+app.put('/api/admin/email', auth, requireFamily, (req, res) => {
+  const me = memberOf(req.userId)
+  if (me.role !== 'owner') return res.status(403).json({ error: 'Only the family owner can connect email' })
+  const key = String(req.body.apiKey || '').trim()
+  if (!/^re_[A-Za-z0-9_-]{10,}$/.test(key))
+    return res.status(400).json({ error: 'That doesn\'t look like a Resend API key (they start with re_)' })
+  setCfg('resend_key', key)
+  const from = String(req.body.from || '').trim()
+  if (from) setCfg('email_from', from)
+  res.json({ emailEnabled: true })
+})
+
+// Owner sanity check: send a test email to their own address and surface the result.
+app.post('/api/admin/email/test', auth, requireFamily, async (req, res) => {
+  const me = memberOf(req.userId)
+  if (me.role !== 'owner') return res.status(403).json({ error: 'Only the family owner can send the test email' })
+  const user = db.prepare('select email from users where id = ?').get(req.userId)
+  const result = await sendEmail(
+    user.email,
+    '🥣 First Bites test — email updates are working!',
+    `This is the test email from your family's First Bites server. If you're reading this, email updates work.\n\n${APP_URL}`,
+    `<div style="font-family:'Nunito',-apple-system,sans-serif;max-width:520px;margin:0 auto;background:#f3f8f5;border-radius:20px;padding:24px;text-align:center">
+      <div style="font-size:44px">🥣</div>
+      <h1 style="color:#16241e;font-size:20px">Email updates are working!</h1>
+      <p style="color:#74857c">This is the test email from your family's First Bites server. You're all set — anyone with the 📬 toggle on will get updates when a new first food is logged.</p>
+      <a href="${APP_URL}" style="background:#0e9f6e;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px;display:inline-block">Open First Bites</a>
+    </div>`,
+  )
+  if (!result.ok) return res.status(502).json({ error: `Resend said: ${result.message}` })
+  res.json({ ok: true, sentTo: user.email })
+})
 
 app.post('/api/signup', (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase()
@@ -541,4 +593,4 @@ app.put('/api/notes/:foodId', auth, requireFamily, (req, res) => {
   res.json({ ok: true })
 })
 
-app.listen(PORT, () => console.log(`First Bites server on :${PORT} (data: ${DATA_DIR}, email: ${emailEnabled ? 'on' : 'off'})`))
+app.listen(PORT, () => console.log(`First Bites server on :${PORT} (data: ${DATA_DIR}, email: ${emailEnabled() ? 'on' : 'off'})`))
