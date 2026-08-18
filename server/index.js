@@ -18,11 +18,12 @@ const emailEnabled = Boolean(RESEND_API_KEY)
 
 fs.mkdirSync(DATA_DIR, { recursive: true })
 const db = new Database(path.join(DATA_DIR, 'first-bites.db'))
+// During deploys the outgoing and incoming server briefly share the database;
+// wait for locks instead of crashing the boot. Must be set before any other
+// statement — journal_mode and the schema both take locks.
+db.pragma('busy_timeout = 15000')
 db.pragma('journal_mode = WAL')
 db.pragma('foreign_keys = ON')
-// During deploys the outgoing and incoming server briefly share the database;
-// wait for locks instead of crashing the boot.
-db.pragma('busy_timeout = 10000')
 
 db.exec(`
 create table if not exists users (
