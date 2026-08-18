@@ -1,149 +1,94 @@
-// Optional family-sync layer backed by Supabase (free tier).
-// Without VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY the app runs fully
-// on-device and none of this is used.
-import { createClient } from '@supabase/supabase-js'
+// Family-sync client for the First Bites server (server/ in this repo,
+// deployed on Railway). Without VITE_API_URL the app runs fully on-device.
+const API = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 
-const url = import.meta.env.VITE_SUPABASE_URL
-const key = import.meta.env.VITE_SUPABASE_ANON_KEY
+export const cloudEnabled = Boolean(API)
 
-export const cloudEnabled = Boolean(url && key)
-export const supabase = cloudEnabled ? createClient(url, key) : null
+const TOKEN_KEY = 'fb.token'
+export const getToken = () => window.localStorage.getItem(TOKEN_KEY)
+const setToken = (t) => (t ? window.localStorage.setItem(TOKEN_KEY, t) : window.localStorage.removeItem(TOKEN_KEY))
 
-export async function getSession() {
-  const { data } = await supabase.auth.getSession()
-  return data.session
+async function call(method, path, body) {
+  const res = await fetch(`${API}${path}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  let data = null
+  try {
+    data = await res.json()
+  } catch {
+    // non-JSON error body
+  }
+  if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`)
+  return data
 }
 
-export function onAuthChange(cb) {
-  const { data } = supabase.auth.onAuthStateChange((_event, session) => cb(session))
-  return () => data.subscription.unsubscribe()
+export async function getConfig() {
+  return call('GET', '/api/config')
 }
 
 export async function signUp(email, password) {
-  const { error } = await supabase.auth.signUp({ email, password })
-  if (error) throw error
+  const { token } = await call('POST', '/api/signup', { email, password })
+  setToken(token)
 }
 
 export async function signIn(email, password) {
-  const { error } = await supabase.auth.signInWithPassword({ email, password })
-  if (error) throw error
+  const { token } = await call('POST', '/api/signin', { email, password })
+  setToken(token)
 }
 
 export async function signOut() {
-  await supabase.auth.signOut()
-}
-
-// Returns { family, members, myName } or null when the user has no family yet.
-export async function getMyFamily(userId) {
-  const { data: memberships, error } = await supabase
-    .from('family_members')
-    .select('family_id, display_name')
-    .eq('user_id', userId)
-  if (error) throw error
-  if (!memberships?.length) return null
-  const { family_id, display_name } = memberships[0]
-  const [{ data: family, error: e1 }, { data: members, error: e2 }] = await Promise.all([
-    supabase.from('families').select('*').eq('id', family_id).single(),
-    supabase.from('family_members').select('display_name, user_id').eq('family_id', family_id),
-  ])
-  if (e1) throw e1
-  if (e2) throw e2
-  return { family, members: members || [], myName: display_name }
-}
-
-export async function createFamily(babyName, birthdate, displayName) {
-  const { data, error } = await supabase.rpc('create_family', {
-    p_baby_name: babyName,
-    p_birthdate: birthdate,
-    p_display_name: displayName,
-  })
-  if (error) throw error
-  return data
-}
-
-export async function joinFamily(code, displayName) {
-  const { data, error } = await supabase.rpc('join_family', {
-    p_code: code,
-    p_display_name: displayName,
-  })
-  if (error) throw error
-  return data
-}
-
-// Pull all shared state. Returns { log, notes } in the app's local shape.
-export async function fetchState(familyId) {
-  const [{ data: tries, error: e1 }, { data: noteRows, error: e2 }] = await Promise.all([
-    supabase.from('tries').select('*').eq('family_id', familyId),
-    supabase.from('food_notes').select('food_id, body').eq('family_id', familyId),
-  ])
-  if (e1) throw e1
-  if (e2) throw e2
-  const log = {}
-  for (const t of tries || []) {
-    ;(log[t.food_id] ||= []).push({
-      id: t.id,
-      date: t.tried_on,
-      rating: t.rating,
-      reaction: t.reaction,
-      notes: t.notes,
-      by: t.fed_by,
-    })
+  try {
+    await call('POST', '/api/signout')
+  } catch {
+    // token already invalid — fine
   }
-  for (const arr of Object.values(log)) arr.sort((a, b) => (a.date < b.date ? -1 : 1))
-  const notes = {}
-  for (const n of noteRows || []) if (n.body) notes[n.food_id] = n.body
-  return { log, notes }
+  setToken(null)
 }
 
-export async function pushTry(familyId, foodId, entry) {
-  const { error } = await supabase.from('tries').upsert({
+// Returns { user, family, members, myName, notifyEmail } — family null when not joined.
+// Returns null when there is no valid session.
+export async function getMe() {
+  if (!getToken()) return null
+  try {
+    return await call('GET', '/api/me')
+  } catch (e) {
+    if (String(e.message).includes('Not signed in')) {
+      setToken(null)
+      return null
+    }
+    throw e
+  }
+}
+
+export const createFamily = (babyName, birthdate, displayName) =>
+  call('POST', '/api/family', { babyName, birthdate, displayName })
+
+export const joinFamily = (code, displayName) => call('POST', '/api/family/join', { code, displayName })
+
+export const updateMe = (fields) => call('PUT', '/api/me', fields)
+
+export const updateBaby = (name, birthdate) => call('PUT', '/api/baby', { name, birthdate })
+
+export const fetchState = () => call('GET', '/api/state')
+
+export const pushTry = (foodId, entry) =>
+  call('PUT', '/api/tries', {
     id: entry.id,
-    family_id: familyId,
-    food_id: foodId,
-    tried_on: entry.date,
+    foodId,
+    date: entry.date,
     rating: entry.rating,
     reaction: entry.reaction,
     notes: entry.notes || '',
-    fed_by: entry.by || '',
+    by: entry.by || '',
   })
-  if (error) throw error
-}
 
-export async function deleteTryById(id) {
-  const { error } = await supabase.from('tries').delete().eq('id', id)
-  if (error) throw error
-}
+export const deleteTryById = (id) => call('DELETE', `/api/tries/${id}`)
 
-export async function deleteTriesForFood(familyId, foodId) {
-  const { error } = await supabase.from('tries').delete().eq('family_id', familyId).eq('food_id', foodId)
-  if (error) throw error
-}
+export const deleteTriesForFood = (foodId) => call('DELETE', `/api/tries/food/${foodId}`)
 
-export async function pushNote(familyId, foodId, body) {
-  if (body) {
-    const { error } = await supabase
-      .from('food_notes')
-      .upsert({ family_id: familyId, food_id: foodId, body, updated_at: new Date().toISOString() })
-    if (error) throw error
-  } else {
-    const { error } = await supabase.from('food_notes').delete().eq('family_id', familyId).eq('food_id', foodId)
-    if (error) throw error
-  }
-}
-
-export async function updateBaby(familyId, babyName, birthdate) {
-  const { error } = await supabase
-    .from('families')
-    .update({ baby_name: babyName, birthdate })
-    .eq('id', familyId)
-  if (error) throw error
-}
-
-export async function updateMyName(familyId, userId, displayName) {
-  const { error } = await supabase
-    .from('family_members')
-    .update({ display_name: displayName })
-    .eq('family_id', familyId)
-    .eq('user_id', userId)
-  if (error) throw error
-}
+export const pushNote = (foodId, body) => call('PUT', `/api/notes/${encodeURIComponent(foodId)}`, { body })

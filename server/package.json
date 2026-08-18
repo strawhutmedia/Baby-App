@@ -1,0 +1,19 @@
+{
+  "name": "first-bites-server",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Family accounts + sync backend for First Bites (first100.baby)",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  }
+}

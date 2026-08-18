@@ -29,9 +29,9 @@ jobs:
       - run: npm ci
       - run: npm run build
         env:
-          # Optional family sync — set these in repo Settings → Secrets to enable
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Family-sync server URL (Railway). Set in repo Settings → Secrets and
+          # variables → Actions → Variables. Empty = app runs on-device only.
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

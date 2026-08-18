@@ -464,5 +464,102 @@ p { margin: 0 0 8px; line-height: 1.5; }
   text-align: center;
 }
 .onboard-card .field { text-align: left; }
-.onboard-logo { font-size: 3rem; }
+.onboard-logo { font-size: 3rem; animation: bob 2.4s ease-in-out infinite; display: inline-block; }
 .onboard h1 { font-size: 1.7rem; margin: 6px 0 8px; }
+
+/* ======================= Motion & delight ======================= */
+
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes popIn {
+  0% { transform: scale(0.4); }
+  60% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(-10deg) scale(1.15); }
+  75% { transform: rotate(10deg) scale(1.15); }
+}
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+@keyframes milestonePop {
+  0% { opacity: 0; transform: scale(0.8) translateY(6px); }
+  70% { transform: scale(1.04) translateY(-2px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.page { animation: pageIn 0.28s ease both; }
+
+/* Everything interactive responds to touch/hover */
+.card, .btn, .chip, .allergen-chip, .tab, .link, .checkbox, .note-btn, .search,
+.field input, .field textarea, .inline-input {
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease,
+    border-color 0.16s ease, color 0.16s ease, opacity 0.16s ease;
+}
+
+@media (hover: hover) {
+  .food-card:hover, .journal-entry:hover, .home-progress:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(43, 39, 34, 0.12);
+    border-color: var(--green);
+  }
+  .food-card:hover .food-emoji { animation: wiggle 0.5s ease; }
+  .journal-entry:hover .journal-emoji { animation: wiggle 0.5s ease; }
+  .check-row:hover { border-color: var(--green); box-shadow: 0 4px 14px rgba(43, 39, 34, 0.1); }
+  .check-row:hover .check-emoji { animation: wiggle 0.5s ease; display: inline-block; }
+  .btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(43, 39, 34, 0.14); }
+  .btn.primary:hover:not(:disabled) { background: #38805f; }
+  .chip:hover:not(.active) { border-color: var(--green); color: var(--green); transform: translateY(-1px); }
+  .allergen-chip:hover { border-color: var(--green); transform: translateY(-1px); }
+  .checkbox:hover { border-color: var(--green); transform: scale(1.12); }
+  .note-btn:hover { opacity: 1; transform: scale(1.2) rotate(-8deg); }
+  .link:hover { text-decoration: underline; }
+  .tab:hover .tab-icon { transform: translateY(-2px) scale(1.15); }
+  .search:hover, .search:focus { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
+}
+
+.food-card:active, .journal-entry:active, .btn:active:not(:disabled), .chip:active { transform: scale(0.96); }
+
+/* Checkbox: springy pop when checked */
+.checkbox .checkmark, .checkbox.on { animation: none; }
+.checkbox.on { animation: popIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.check-row { transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.16s ease; }
+
+/* Progress bar: living gradient */
+.progress-fill {
+  background: linear-gradient(90deg, var(--green), #4d9b74, #6fbe93, #4d9b74, var(--green));
+  background-size: 200% 100%;
+  animation: shimmer 3s linear infinite;
+  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.milestone { animation: milestonePop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+/* Tabs: active icon springs up */
+.tab .tab-icon { transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.tab.active .tab-icon { transform: translateY(-3px) scale(1.2); }
+.tab.active .tab-label { font-weight: 800; }
+
+/* Inputs feel alive on focus */
+.field input:focus, .field textarea:focus, .inline-input:focus, .search:focus {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px var(--green-soft);
+}
+
+/* Join code invites a tap-to-copy vibe */
+.join-code { transition: transform 0.16s ease; }
+.join-code:hover { transform: scale(1.03); }
+
+/* Respect users who prefer less motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

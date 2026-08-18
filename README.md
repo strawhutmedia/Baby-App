@@ -45,22 +45,27 @@ Deployment is automated: `.github/workflows/deploy.yml` builds and publishes the
 
 To enable family sync later, add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in repo **Settings → Secrets and variables → Actions**, then re-run the deploy workflow.
 
-## Enabling family sync (free, ~10 minutes)
+## Enabling family sync (Railway, ~10 minutes)
 
-Family accounts use [Supabase](https://supabase.com)'s free tier (no credit card; the free allowance is far more than a family food log will ever use).
+Family accounts run on the small server in [`server/`](server/) — email/password sign-in, families with 6-letter join codes, shared checklist state, and optional email notifications. Deploy it on [Railway](https://railway.app):
 
-1. Create a free account at supabase.com and click **New project** (pick any name/password/region).
-2. In the project, open **SQL Editor → New query**, paste the entire contents of [`supabase/schema.sql`](supabase/schema.sql), and click **Run**.
-3. Recommended: in **Authentication → Sign In / Up**, turn OFF "Confirm email" so the family can sign in immediately without a confirmation-email step.
-4. In **Project Settings → API**, copy the **Project URL** and the **anon public** key.
-5. Give them to the app as environment variables wherever you build/host it (e.g. in Netlify/Vercel's environment settings, or a local `.env` file):
-   ```
-   VITE_SUPABASE_URL=https://YOURPROJECT.supabase.co
-   VITE_SUPABASE_ANON_KEY=eyJ...
-   ```
-6. Rebuild/redeploy. The Baby tab now shows **Family sync**: create an account, tap **Start our family** (any history already on your phone uploads automatically), and share the 6-letter code with everyone else. They sign up, tap **Join with a code**, and from then on every check-off, note, and journal entry syncs to the whole family — labeled with who fed it.
+1. Railway dashboard → **New Project → Deploy from GitHub repo** → pick `strawhutmedia/Baby-App`.
+2. In the new service's **Settings → Root Directory**, enter `server` and redeploy.
+3. Still in the service: **Settings → Volumes → Attach volume**, mount path `/data`, and add an environment variable `DATA_DIR=/data` (**Variables** tab). This keeps the database safe across redeploys — don't skip it.
+4. **Settings → Networking → Generate Domain** — copy the public URL (like `https://baby-app-production.up.railway.app`).
+5. In the GitHub repo: **Settings → Secrets and variables → Actions → Variables** → add `VITE_API_URL` = that Railway URL. Re-run the deploy workflow (Actions tab → Deploy to GitHub Pages → Re-run).
 
-The anon key is designed to be public; row-level security in the schema ensures each family can only ever see its own data.
+The Baby tab on first100.baby then shows **Family sync**: create an account, tap **Start our family** (history already on the phone uploads automatically), and share the 6-letter code. Everyone else signs up, taps **Join with a code**, and every check-off, note, and journal entry syncs to the whole family — labeled with who fed it.
+
+### Optional: email notifications ("Grandma logged a food!")
+
+Each family member gets an opt-in toggle once email is configured. Sign up free at [resend.com](https://resend.com), verify the `first100.baby` domain (two DNS records at GoDaddy — Resend shows them), create an API key, and set these variables on the Railway service:
+
+```
+RESEND_API_KEY=re_...
+EMAIL_FROM=First Bites <hello@first100.baby>
+APP_URL=https://first100.baby
+```
 
 ## Disclaimer
 

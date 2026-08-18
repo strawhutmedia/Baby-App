@@ -37,69 +37,57 @@ export default function App() {
   const [tab, setTab] = useState('home')
   const [openFoodId, setOpenFoodId] = useState(null)
 
-  // ----- family sync (only active when the app was built with Supabase keys) -----
-  const [session, setSession] = useState(null)
-  const [family, setFamily] = useState(null) // { family, members, myName }
+  // ----- family sync (active when the app was built with VITE_API_URL) -----
+  const [account, setAccount] = useState(null) // null = signed out; {user, family, members, myName, notifyEmail}
+  const [emailEnabled, setEmailEnabled] = useState(false)
   const [syncMsg, setSyncMsg] = useState('')
-  const familyRef = useRef(null)
-  familyRef.current = family
+  const accountRef = useRef(null)
+  accountRef.current = account
 
   useEffect(() => {
     if (!cloud.cloudEnabled) return
     let cancelled = false
-    cloud.getSession().then((s) => !cancelled && setSession(s))
-    const off = cloud.onAuthChange((s) => setSession(s))
-    return () => {
-      cancelled = true
-      off()
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!cloud.cloudEnabled || !session) {
-      setFamily(null)
-      return
-    }
-    let cancelled = false
     cloud
-      .getMyFamily(session.user.id)
-      .then((fam) => {
+      .getMe()
+      .then((me) => {
         if (cancelled) return
-        setFamily(fam)
-        if (fam) connectFamily(fam)
+        setAccount(me)
+        if (me?.family) connectFamily(me)
       })
-      .catch((e) => setSyncMsg(String(e.message || e)))
+      .catch(() => {})
+    cloud.getConfig().then((c) => !cancelled && setEmailEnabled(Boolean(c.emailEnabled))).catch(() => {})
     return () => {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session])
+  }, [])
 
-  async function connectFamily(fam) {
+  async function connectFamily(me) {
     try {
-      const remote = await cloud.fetchState(fam.family.id)
+      const remote = await cloud.fetchState()
       const syncedKey = 'fb.syncedFamily'
-      if (window.localStorage.getItem(syncedKey) !== fam.family.id) {
-        // First connection from this device: upload local history the cloud doesn't have.
+      if (window.localStorage.getItem(syncedKey) !== me.family.id) {
+        // First connection from this device: upload local history the family doesn't have.
         const cloudIds = new Set(Object.values(remote.log).flat().map((e) => e.id))
         for (const [foodId, entries] of Object.entries(log)) {
           for (const e of entries) {
-            const entry = { ...e, id: e.id || uid() }
-            if (!cloudIds.has(entry.id)) await cloud.pushTry(fam.family.id, foodId, entry)
+            // History logged before sign-in gets attributed to whoever uploads it.
+            const entry = { ...e, id: e.id || uid(), by: e.by || me.myName || '' }
+            if (!cloudIds.has(entry.id)) await cloud.pushTry(foodId, entry)
           }
         }
         for (const [foodId, body] of Object.entries(notes)) {
-          if (!remote.notes[foodId]) await cloud.pushNote(fam.family.id, foodId, body)
+          if (!remote.notes[foodId]) await cloud.pushNote(foodId, body)
         }
-        window.localStorage.setItem(syncedKey, fam.family.id)
-        const merged = await cloud.fetchState(fam.family.id)
+        window.localStorage.setItem(syncedKey, me.family.id)
+        const merged = await cloud.fetchState()
         setLog(merged.log)
         setNotes(merged.notes)
       } else {
         setLog(remote.log)
         setNotes(remote.notes)
       }
-      setProfile({ name: fam.family.baby_name, birthdate: fam.family.birthdate })
+      setProfile({ name: me.family.babyName, birthdate: me.family.birthdate })
       setSyncMsg('')
     } catch (e) {
       setSyncMsg(`Sync problem: ${e.message || e}`)
@@ -110,10 +98,9 @@ export default function App() {
   useEffect(() => {
     if (!cloud.cloudEnabled) return
     const refresh = () => {
-      const fam = familyRef.current
-      if (fam && document.visibilityState === 'visible') {
+      if (accountRef.current?.family && document.visibilityState === 'visible') {
         cloud
-          .fetchState(fam.family.id)
+          .fetchState()
           .then(({ log: l, notes: n }) => {
             setLog(l)
             setNotes(n)
@@ -126,14 +113,14 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const synced = Boolean(family)
-  const currentFeeder = synced ? family.myName : feeder
+  const synced = Boolean(account?.family)
+  const currentFeeder = synced ? account.myName : feeder
 
   // ----- mutations (optimistic local write; push to family when synced) -----
   function addTry(foodId, partial) {
     const entry = { id: uid(), by: currentFeeder || '', ...partial }
     setLog((prev) => ({ ...prev, [foodId]: [...(prev[foodId] || []), entry] }))
-    if (synced) cloud.pushTry(family.family.id, foodId, entry).catch((e) => setSyncMsg(`Sync problem: ${e.message}`))
+    if (synced) cloud.pushTry(foodId, entry).catch((e) => setSyncMsg(`Sync problem: ${e.message}`))
   }
   function removeTry(foodId, index) {
     const entry = (log[foodId] || [])[index]
@@ -161,7 +148,7 @@ export default function App() {
         delete copy[foodId]
         return copy
       })
-      if (synced) cloud.deleteTriesForFood(family.family.id, foodId).catch(() => {})
+      if (synced) cloud.deleteTriesForFood(foodId).catch(() => {})
     }
   }
   function setNote(foodId, text) {
@@ -172,16 +159,14 @@ export default function App() {
       else delete copy[foodId]
       return copy
     })
-    if (synced) cloud.pushNote(family.family.id, foodId, body).catch(() => {})
+    if (synced) cloud.pushNote(foodId, body).catch(() => {})
   }
   function saveProfile(next) {
     setProfile(next)
     if (synced) {
       cloud
-        .updateBaby(family.family.id, next.name, next.birthdate)
-        .then(() =>
-          setFamily((f) => f && { ...f, family: { ...f.family, baby_name: next.name, birthdate: next.birthdate } }),
-        )
+        .updateBaby(next.name, next.birthdate)
+        .then((payload) => setAccount((a) => a && { ...a, ...payload }))
         .catch(() => {})
     }
   }
@@ -199,7 +184,7 @@ export default function App() {
         const entry = { ...e, id: e.id || uid() }
         nextLog[foodId] = [...(nextLog[foodId] || []), entry]
         added++
-        if (synced) cloud.pushTry(family.family.id, foodId, entry).catch(() => {})
+        if (synced) cloud.pushTry(foodId, entry).catch(() => {})
       }
     }
     setLog(nextLog)
@@ -207,7 +192,7 @@ export default function App() {
     for (const [foodId, body] of Object.entries(data.notes || {})) {
       if (!nextNotes[foodId] && body) {
         nextNotes[foodId] = body
-        if (synced) cloud.pushNote(family.family.id, foodId, body).catch(() => {})
+        if (synced) cloud.pushNote(foodId, body).catch(() => {})
       }
     }
     setNotes(nextNotes)
@@ -224,36 +209,41 @@ export default function App() {
   const openFood = openFoodId ? FOODS.find((f) => f.id === openFoodId) : null
 
   const familyProps = {
-    session,
-    family,
+    account,
+    emailEnabled,
     syncMsg,
     onSignIn: async (email, password, mode) => {
       setSyncMsg('')
       if (mode === 'signup') await cloud.signUp(email, password)
-      await cloud.signIn(email, password)
+      else await cloud.signIn(email, password)
+      const me = await cloud.getMe()
+      setAccount(me)
+      if (me?.family) await connectFamily(me)
     },
     onSignOut: async () => {
       await cloud.signOut()
       window.localStorage.removeItem('fb.syncedFamily')
-      setFamily(null)
+      setAccount(null)
     },
     onCreateFamily: async (displayName) => {
-      const fam = await cloud.createFamily(profile.name, profile.birthdate, displayName)
-      const full = await cloud.getMyFamily(session.user.id)
-      setFamily(full)
-      if (full) await connectFamily(full)
-      return fam
+      const payload = await cloud.createFamily(profile.name, profile.birthdate, displayName)
+      const me = { ...account, ...payload }
+      setAccount(me)
+      await connectFamily(me)
     },
     onJoinFamily: async (code, displayName) => {
-      await cloud.joinFamily(code, displayName)
-      const full = await cloud.getMyFamily(session.user.id)
-      setFamily(full)
-      if (full) await connectFamily(full)
+      const payload = await cloud.joinFamily(code, displayName)
+      const me = { ...account, ...payload }
+      setAccount(me)
+      await connectFamily(me)
     },
     onRename: async (name) => {
-      await cloud.updateMyName(family.family.id, session.user.id, name)
-      const full = await cloud.getMyFamily(session.user.id)
-      setFamily(full)
+      const payload = await cloud.updateMe({ displayName: name })
+      setAccount((a) => a && { ...a, ...payload })
+    },
+    onToggleNotify: async (value) => {
+      const payload = await cloud.updateMe({ notifyEmail: value })
+      setAccount((a) => a && { ...a, ...payload })
     },
   }
 
@@ -262,6 +252,7 @@ export default function App() {
       <main className="main">
         {openFood ? (
           <FoodDetail
+            key={openFood.id}
             food={openFood}
             band={band}
             entries={log[openFood.id] || []}
@@ -277,7 +268,6 @@ export default function App() {
             months={months}
             log={log}
             onOpenFood={setOpenFoodId}
-            onGoFoods={() => setTab('foods')}
             onGoChecklist={() => setTab('first100')}
           />
         ) : tab === 'first100' ? (
@@ -289,8 +279,6 @@ export default function App() {
             onUncheck={uncheck}
             onSetNote={setNote}
           />
-        ) : tab === 'foods' ? (
-          <FoodBrowser log={log} months={months} onOpenFood={setOpenFoodId} />
         ) : tab === 'journal' ? (
           <Journal log={log} onOpenFood={setOpenFoodId} />
         ) : (
@@ -315,7 +303,6 @@ export default function App() {
         <nav className="tabbar">
           <TabButton id="home" icon="🏠" label="Home" tab={tab} setTab={setTab} />
           <TabButton id="first100" icon="✅" label="First 100" tab={tab} setTab={setTab} />
-          <TabButton id="foods" icon="🍎" label="Foods" tab={tab} setTab={setTab} />
           <TabButton id="journal" icon="📖" label="Journal" tab={tab} setTab={setTab} />
           <TabButton id="baby" icon="👶" label="Baby" tab={tab} setTab={setTab} />
         </nav>
@@ -341,7 +328,7 @@ function Onboarding({ onDone }) {
 
   return (
     <div className="onboard">
-      <div className="onboard-card">
+      <div className="onboard-card page">
         <div className="onboard-logo">🥣</div>
         <h1>First Bites</h1>
         <p className="muted">
@@ -373,20 +360,40 @@ function Onboarding({ onDone }) {
   )
 }
 
-/* ---------- First 100 checklist ---------- */
+/* ---------- First 100 checklist (with built-in search & filters) ---------- */
 
 function First100({ log, notes, onOpenFood, onCheck, onUncheck, onSetNote }) {
-  const [editingNote, setEditingNote] = useState(null) // foodId being edited
+  const [editingNote, setEditingNote] = useState(null)
+  const [query, setQuery] = useState('')
+  const [category, setCategory] = useState('all')
+  const [filter, setFilter] = useState('all') // all | untried | tried | allergen | iron
+
   const triedCount = FOODS.filter((f) => log[f.id]).length
   const pct = Math.round((triedCount / FOODS.length) * 100)
   const milestone = MILESTONES.find(([n]) => triedCount >= n)
+
+  const matches = (f) => {
+    if (query && !f.name.toLowerCase().includes(query.toLowerCase())) return false
+    if (category !== 'all' && f.category !== category) return false
+    if (filter === 'untried' && log[f.id]) return false
+    if (filter === 'tried' && !log[f.id]) return false
+    if (filter === 'allergen' && !f.allergen) return false
+    if (filter === 'iron' && !f.ironRich) return false
+    return true
+  }
+
+  const visibleCategories = CATEGORIES.map((cat) => ({
+    cat,
+    all: FOODS.filter((f) => f.category === cat.id),
+    shown: FOODS.filter((f) => f.category === cat.id && matches(f)),
+  })).filter((g) => g.shown.length > 0)
 
   return (
     <div className="page">
       <header>
         <h1>The First 100 Foods</h1>
         <p className="muted small">
-          Tick off every new food your baby tries. Tap a food's name for how to serve it safely.
+          Tick off every new food your baby tries — tap a food for its full guide.
         </p>
       </header>
 
@@ -402,18 +409,43 @@ function First100({ log, notes, onOpenFood, onCheck, onUncheck, onSetNote }) {
         {!milestone && <p className="muted small">Log the first food to start the streak! 🎊</p>}
       </div>
 
-      {CATEGORIES.map((cat) => {
-        const foods = FOODS.filter((f) => f.category === cat.id)
-        const done = foods.filter((f) => log[f.id]).length
+      <input
+        className="search"
+        placeholder="Search foods…"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      <div className="chip-row">
+        <Chip active={category === 'all'} onClick={() => setCategory('all')}>All</Chip>
+        {CATEGORIES.map((c) => (
+          <Chip key={c.id} active={category === c.id} onClick={() => setCategory(c.id)}>
+            {c.emoji} {c.label}
+          </Chip>
+        ))}
+      </div>
+      <div className="chip-row">
+        <Chip active={filter === 'all'} onClick={() => setFilter('all')}>Everything</Chip>
+        <Chip active={filter === 'untried'} onClick={() => setFilter('untried')}>Not tried</Chip>
+        <Chip active={filter === 'tried'} onClick={() => setFilter('tried')}>Tried ✅</Chip>
+        <Chip active={filter === 'allergen'} onClick={() => setFilter('allergen')}>Allergens</Chip>
+        <Chip active={filter === 'iron'} onClick={() => setFilter('iron')}>Iron-rich</Chip>
+      </div>
+
+      {visibleCategories.length === 0 && (
+        <p className="muted" style={{ marginTop: 16 }}>No foods match — try clearing the search or filters.</p>
+      )}
+
+      {visibleCategories.map(({ cat, all, shown }) => {
+        const done = all.filter((f) => log[f.id]).length
         return (
           <section key={cat.id} className="check-group">
             <div className="check-group-head">
               <h2>{cat.emoji} {cat.label}</h2>
-              <span className={`group-count ${done === foods.length ? 'complete' : ''}`}>
-                {done === foods.length ? '★ ' : ''}{done}/{foods.length}
+              <span className={`group-count ${done === all.length ? 'complete' : ''}`}>
+                {done === all.length ? '★ ' : ''}{done}/{all.length}
               </span>
             </div>
-            {foods.map((f) => {
+            {shown.map((f) => {
               const tried = !!log[f.id]
               const note = notes[f.id] || ''
               const editing = editingNote === f.id
@@ -498,7 +530,7 @@ function NoteEditor({ initial, onDone }) {
 
 /* ---------- Home ---------- */
 
-function Home({ profile, months, log, onOpenFood, onGoFoods, onGoChecklist }) {
+function Home({ profile, months, log, onOpenFood, onGoChecklist }) {
   const triedIds = Object.keys(log)
   const triedCount = triedIds.length
   const band = bandForAgeMonths(months)
@@ -511,7 +543,6 @@ function Home({ profile, months, log, onOpenFood, onGoFoods, onGoChecklist }) {
 
   const suggestions = useMemo(() => {
     const untried = FOODS.filter((f) => !log[f.id] && (months == null || f.minAge <= Math.max(months, 6)))
-    // Prioritize: allergens not yet introduced, then iron-rich, then everything else
     const score = (f) =>
       (f.allergen && !allergensIntroduced.has(f.allergen) ? 2 : 0) + (f.ironRich ? 1 : 0)
     return [...untried].sort((a, b) => score(b) - score(a)).slice(0, 6)
@@ -562,7 +593,7 @@ function Home({ profile, months, log, onOpenFood, onGoFoods, onGoChecklist }) {
       <section>
         <div className="section-head">
           <h2>Try next</h2>
-          <button className="link" onClick={onGoFoods}>See all foods →</button>
+          <button className="link" onClick={onGoChecklist}>Full checklist →</button>
         </div>
         <p className="muted small">
           Prioritized for you: common allergens you haven't introduced yet, then iron-rich foods —
@@ -607,63 +638,6 @@ function AllergenTracker({ log, onOpenFood }) {
         })}
       </div>
     </section>
-  )
-}
-
-/* ---------- Food browser ---------- */
-
-function FoodBrowser({ log, months, onOpenFood }) {
-  const [query, setQuery] = useState('')
-  const [category, setCategory] = useState('all')
-  const [filter, setFilter] = useState('all') // all | untried | tried | allergen | iron
-
-  const foods = useMemo(() => {
-    return FOODS.filter((f) => {
-      if (query && !f.name.toLowerCase().includes(query.toLowerCase())) return false
-      if (category !== 'all' && f.category !== category) return false
-      if (filter === 'untried' && log[f.id]) return false
-      if (filter === 'tried' && !log[f.id]) return false
-      if (filter === 'allergen' && !f.allergen) return false
-      if (filter === 'iron' && !f.ironRich) return false
-      return true
-    })
-  }, [query, category, filter, log])
-
-  return (
-    <div className="page">
-      <header>
-        <h1>Foods</h1>
-        <input
-          className="search"
-          placeholder="Search foods…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-      </header>
-
-      <div className="chip-row">
-        <Chip active={category === 'all'} onClick={() => setCategory('all')}>All</Chip>
-        {CATEGORIES.map((c) => (
-          <Chip key={c.id} active={category === c.id} onClick={() => setCategory(c.id)}>
-            {c.emoji} {c.label}
-          </Chip>
-        ))}
-      </div>
-      <div className="chip-row">
-        <Chip active={filter === 'all'} onClick={() => setFilter('all')}>Everything</Chip>
-        <Chip active={filter === 'untried'} onClick={() => setFilter('untried')}>Not tried</Chip>
-        <Chip active={filter === 'tried'} onClick={() => setFilter('tried')}>Tried ✅</Chip>
-        <Chip active={filter === 'allergen'} onClick={() => setFilter('allergen')}>Allergens</Chip>
-        <Chip active={filter === 'iron'} onClick={() => setFilter('iron')}>Iron-rich</Chip>
-      </div>
-
-      <div className="food-grid">
-        {foods.map((f) => (
-          <FoodCard key={f.id} food={f} tried={!!log[f.id]} onOpen={() => onOpenFood(f.id)} />
-        ))}
-        {foods.length === 0 && <p className="muted">No foods match. Try clearing filters.</p>}
-      </div>
-    </div>
   )
 }
 
@@ -922,7 +896,7 @@ function Profile({
   const [confirmReset, setConfirmReset] = useState(false)
   const [importMsg, setImportMsg] = useState('')
   const fileRef = useRef(null)
-  const synced = Boolean(familyProps.family)
+  const synced = Boolean(familyProps.account?.family)
 
   const dirty = name.trim() !== profile.name || birthdate !== profile.birthdate
 
@@ -1105,7 +1079,10 @@ function AddCaregiver({ onAdd }) {
 
 /* ---------- Family sync UI ---------- */
 
-function FamilySection({ session, family, syncMsg, onSignIn, onSignOut, onCreateFamily, onJoinFamily, onRename }) {
+function FamilySection({
+  account, emailEnabled, syncMsg,
+  onSignIn, onSignOut, onCreateFamily, onJoinFamily, onRename, onToggleNotify,
+}) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
@@ -1126,16 +1103,15 @@ function FamilySection({ session, family, syncMsg, onSignIn, onSignOut, onCreate
       <section className="card">
         <h2>👨‍👩‍👧 Family sync</h2>
         <p className="small">
-          Right now this device keeps its own log. To let Mom, Dad and Grandma all log foods from
-          their own phones into one shared list, the site needs to be connected to a free Supabase
-          database — a 10-minute, $0 setup described in the project README. Once connected, this
-          section becomes sign-in, and a 6-letter family code invites everyone else.
+          Right now this device keeps its own log. Family accounts — everyone logging from their
+          own phone into one shared checklist — switch on once the family server is connected.
+          Coming very soon!
         </p>
       </section>
     )
   }
 
-  if (!session) {
+  if (!account) {
     return (
       <section className="card">
         <h2>👨‍👩‍👧 Family sync</h2>
@@ -1147,11 +1123,11 @@ function FamilySection({ session, family, syncMsg, onSignIn, onSignOut, onCreate
     )
   }
 
-  if (!family) {
+  if (!account.family) {
     return (
       <section className="card">
         <h2>👨‍👩‍👧 Family sync</h2>
-        <p className="muted small">Signed in as {session.user.email}</p>
+        <p className="muted small">Signed in as {account.user.email}</p>
         <FamilySetup
           busy={busy}
           err={err || syncMsg}
@@ -1170,11 +1146,21 @@ function FamilySection({ session, family, syncMsg, onSignIn, onSignOut, onCreate
         Share this code so Mom, Dad or Grandma can join from their phone
         (Baby tab → Family sync → Join):
       </p>
-      <div className="join-code">{family.family.join_code}</div>
+      <div className="join-code">{account.family.joinCode}</div>
       <p className="muted small" style={{ marginTop: 8 }}>
-        In the family: {family.members.map((m) => m.display_name).join(', ')}
+        In the family: {account.members.map((m) => m.displayName).join(', ')}
       </p>
-      <RenameSelf current={family.myName} onRename={(n) => run(() => onRename(n))} />
+      <RenameSelf current={account.myName} onRename={(n) => run(() => onRename(n))} />
+      {emailEnabled && (
+        <label className="check-field">
+          <input
+            type="checkbox"
+            checked={account.notifyEmail}
+            onChange={(e) => run(() => onToggleNotify(e.target.checked))}
+          />
+          <span>📬 Email me when someone logs a new first food</span>
+        </label>
+      )}
       {(err || syncMsg) && <p className="small" style={{ color: 'var(--red)' }}>{err || syncMsg}</p>}
       <button className="link danger small" onClick={() => run(onSignOut)} disabled={busy}>
         Sign out on this device
