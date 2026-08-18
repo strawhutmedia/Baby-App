@@ -205,8 +205,18 @@ export default function App() {
   const months = ageInMonths(profile?.birthdate)
   const band = bandForAgeMonths(months)
 
+  async function handleSignIn(email, password, mode) {
+    setSyncMsg('')
+    if (mode === 'signup') await cloud.signUp(email, password)
+    else await cloud.signIn(email, password)
+    const me = await cloud.getMe()
+    setAccount(me)
+    if (me?.family) await connectFamily(me) // sets the baby profile → leaves onboarding
+    return me
+  }
+
   if (!profile) {
-    return <Onboarding onDone={setProfile} />
+    return <Onboarding onDone={setProfile} canSignIn={cloud.cloudEnabled} onSignIn={handleSignIn} />
   }
 
   const openFood = openFoodId ? FOODS.find((f) => f.id === openFoodId) : null
@@ -215,14 +225,7 @@ export default function App() {
     account,
     emailEnabled,
     syncMsg,
-    onSignIn: async (email, password, mode) => {
-      setSyncMsg('')
-      if (mode === 'signup') await cloud.signUp(email, password)
-      else await cloud.signIn(email, password)
-      const me = await cloud.getMe()
-      setAccount(me)
-      if (me?.family) await connectFamily(me)
-    },
+    onSignIn: handleSignIn,
     onSignOut: async () => {
       await cloud.signOut()
       window.localStorage.removeItem('fb.syncedFamily')
@@ -347,34 +350,97 @@ function TabButton({ id, icon, label, tab, setTab }) {
 
 /* ---------- Onboarding ---------- */
 
-function Onboarding({ onDone }) {
+function Onboarding({ onDone, canSignIn, onSignIn }) {
   const [name, setName] = useState('')
   const [birthdate, setBirthdate] = useState('')
+  const [signingIn, setSigningIn] = useState(false)
+  const [email, setEmail] = useState('')
+  const [pw, setPw] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [notice, setNotice] = useState('')
+
+  async function submitSignIn() {
+    setBusy(true)
+    setErr('')
+    try {
+      const me = await onSignIn(email, pw, 'signin')
+      if (me && !me.family) {
+        // Signed in, but this account has no family yet — finish setup below.
+        setSigningIn(false)
+        setNotice('Signed in! Now set up your baby below, then start or join the family from the Baby tab.')
+      }
+      // With a family, the profile arrives automatically and this screen closes.
+    } catch (e) {
+      setErr(e.message || String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return (
     <div className="onboard">
       <div className="onboard-card page">
         <div className="onboard-logo">🥣</div>
         <h1>First Bites</h1>
-        <p className="muted">
-          The first 100 foods, free forever: how to serve each one safely by age, a checklist to
-          tick off every new taste, and space for your notes. No subscription, ever.
-        </p>
-        <label className="field">
-          <span>Baby's name</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Juniper" />
-        </label>
-        <label className="field">
-          <span>Birthdate</span>
-          <input type="date" value={birthdate} onChange={(e) => setBirthdate(e.target.value)} max={todayISO()} />
-        </label>
-        <button
-          className="btn primary big"
-          disabled={!name.trim() || !birthdate}
-          onClick={() => onDone({ name: name.trim(), birthdate })}
-        >
-          Let's eat! 🎉
-        </button>
+        {!signingIn ? (
+          <>
+            <p className="muted">
+              The first 100 foods, free forever: how to serve each one safely by age, a checklist
+              to tick off every new taste, and space for your notes. No subscription, ever.
+            </p>
+            {notice && <p className="small" style={{ color: 'var(--green)' }}>{notice}</p>}
+            <label className="field">
+              <span>Baby's name</span>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Juniper" />
+            </label>
+            <label className="field">
+              <span>Birthdate</span>
+              <input type="date" value={birthdate} onChange={(e) => setBirthdate(e.target.value)} max={todayISO()} />
+            </label>
+            <button
+              className="btn primary big"
+              disabled={!name.trim() || !birthdate}
+              onClick={() => onDone({ name: name.trim(), birthdate })}
+            >
+              Let's eat! 🎉
+            </button>
+            {canSignIn && !notice && (
+              <p className="small" style={{ marginTop: 14 }}>
+                Already in the family?{' '}
+                <button className="link" onClick={() => setSigningIn(true)}>Sign in</button>
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="muted">
+              Welcome back! Sign in and your family's checklist appears right where you left it.
+            </p>
+            <label className="field">
+              <span>Email</span>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+            </label>
+            <label className="field">
+              <span>Password</span>
+              <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} />
+            </label>
+            {err && <p className="small" style={{ color: 'var(--red)' }}>{err}</p>}
+            <button
+              className="btn primary big"
+              disabled={busy || !email || pw.length < 6}
+              onClick={submitSignIn}
+            >
+              {busy ? 'Signing in…' : 'Sign in'}
+            </button>
+            <p className="small" style={{ marginTop: 14 }}>
+              New here?{' '}
+              <button className="link" onClick={() => { setSigningIn(false); setErr('') }}>
+                Set up your baby instead
+              </button>
+            </p>
+          </>
+        )}
         <p className="fineprint">
           General information only, not medical advice. Always supervise eating, and talk to your
           pediatrician about starting solids and introducing allergens — especially if your baby
