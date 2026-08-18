@@ -25,10 +25,25 @@ npm run preview    # serve the production build
 
 Built with React + Vite, no backend.
 
-## Putting it online (free) + a cheap domain
+## Going live at first100.baby (free hosting on GitHub Pages)
 
-1. **Free hosting** — push this repo to GitHub, then connect it to [Netlify](https://netlify.com) or [Vercel](https://vercel.com) (both free for this). Build command `npm run build`, output directory `dist`. You immediately get a free URL like `first-bites.netlify.app` — you can stop here and pay nothing at all.
-2. **Optional custom domain** (~$5–15/year, the only cost in this whole project). At last check these were unregistered: `first100bites.com`, `first100bites.app`, `first100foods.app`, `babysfirstbites.com`, `100firstbites.com`, `firstbites100.com`. Cheapest registrars: [Cloudflare Registrar](https://www.cloudflare.com/products/registrar/) and [Porkbun](https://porkbun.com) (at-cost pricing, no upsells). Point it at your Netlify/Vercel site in their dashboard — HTTPS is automatic.
+Deployment is automated: `.github/workflows/deploy.yml` builds and publishes the site on every push. One-time setup:
+
+1. **Enable Pages** — the workflow enables it automatically on its first run. If a run ever complains, go to repo **Settings → Pages** and set *Source* to **GitHub Actions**. The site appears at `https://strawhutmedia.github.io/Baby-App/`.
+2. **Connect the domain** — in repo **Settings → Pages → Custom domain**, enter `first100.baby`, save, and tick **Enforce HTTPS** once it verifies.
+3. **Point GoDaddy at GitHub** — in GoDaddy's DNS manager for `first100.baby`, delete any existing `A` or "Parked" records, then add:
+
+   | Type  | Name | Value               |
+   |-------|------|---------------------|
+   | A     | @    | 185.199.108.153     |
+   | A     | @    | 185.199.109.153     |
+   | A     | @    | 185.199.110.153     |
+   | A     | @    | 185.199.111.153     |
+   | CNAME | www  | strawhutmedia.github.io |
+
+   DNS can take from minutes to a couple of hours to propagate. After that, `https://first100.baby` is live, HTTPS included, at $0/month forever.
+
+To enable family sync later, add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in repo **Settings → Secrets and variables → Actions**, then re-run the deploy workflow.
 
 ## Enabling family sync (free, ~10 minutes)
 

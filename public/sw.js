@@ -1,8 +1,11 @@
 // Offline support: cache app shell and assets so First Bites works with no connection.
-const CACHE = 'first-bites-v1'
+// BASE is derived from the registration scope so the same worker serves the app
+// at first100.baby/ and at strawhutmedia.github.io/Baby-App/.
+const CACHE = 'first-bites-v2'
+const BASE = self.registration.scope
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/'])))
+  event.waitUntil(caches.open(CACHE).then((c) => c.addAll([BASE])))
   self.skipWaiting()
 })
 
@@ -23,10 +26,10 @@ self.addEventListener('fetch', (event) => {
       fetch(request)
         .then((res) => {
           const copy = res.clone()
-          caches.open(CACHE).then((c) => c.put('/', copy))
+          caches.open(CACHE).then((c) => c.put(BASE, copy))
           return res
         })
-        .catch(() => caches.match('/')),
+        .catch(() => caches.match(BASE)),
     )
     return
   }
