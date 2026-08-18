@@ -148,32 +148,91 @@ function familyPayload(userId) {
   }
 }
 
-async function sendEmail(to, subject, text) {
+async function sendEmail(to, subject, text, html) {
+  if (process.env.EMAIL_DEBUG_FILE) {
+    // Testing hook: capture instead of sending.
+    fs.appendFileSync(process.env.EMAIL_DEBUG_FILE, JSON.stringify({ to, subject, text, html }) + '\n')
+    return
+  }
   if (!emailEnabled) return
   try {
     await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: EMAIL_FROM, to: [to], subject, text }),
+      body: JSON.stringify({ from: EMAIL_FROM, to: [to], subject, text, ...(html ? { html } : {}) }),
     })
   } catch (e) {
     console.error('email send failed:', e.message)
   }
 }
 
-function notifyFamily(familyId, actorUserId, message) {
-  const fam = db.prepare('select baby_name from families where id = ?').get(familyId)
-  const title = `🥣 ${fam.baby_name} tried something new!`
+// Food guide data for rich notifications (regenerate with scripts/export-foods.mjs).
+const FOODS = JSON.parse(fs.readFileSync(new URL('./foods.json', import.meta.url), 'utf8'))
+
+const RATING_LABEL = { loved: 'loved it 😍', ok: 'thought it was ok 😐', refused: 'refused it 🙅' }
+
+function ageBand(birthdate) {
+  const months = Math.floor((Date.now() - new Date(birthdate + 'T00:00:00')) / (30.44 * 24 * 3600 * 1000))
+  if (months < 9) return { key: 6, label: '6–8 months' }
+  if (months < 12) return { key: 9, label: '9–11 months' }
+  return { key: 12, label: '12+ months' }
+}
+
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+function buildEmail(fam, food, t) {
+  const today = new Date().toISOString().slice(0, 10)
+  const when = t.date === today ? 'today' : `on ${t.date} (logged later)`
+  const who = t.by || 'Someone'
+  const verdict = t.rating ? ` — and ${RATING_LABEL[t.rating] || t.rating}` : ''
+  const band = ageBand(fam.birthdate)
+  const subject = `${food.emoji} ${fam.baby_name} tried ${food.name} for the first time!`
+  const lines = [
+    `${who} gave ${fam.baby_name} ${food.name.toLowerCase()} ${when}${verdict}.`,
+    t.notes ? `Note from ${who}: "${t.notes}"` : null,
+    ``,
+    `Why ${food.name.toLowerCase()} is great: ${food.nutrition}`,
+    `How to serve it at ${fam.baby_name}'s age (${band.label}): ${food.serve[band.key]}`,
+    food.allergen ? `Heads up: ${food.name.toLowerCase()} is a common allergen — keep offering it regularly and watch for reactions.` : null,
+    ``,
+    `Full journal: ${APP_URL}`,
+  ].filter((l) => l !== null)
+  const text = lines.join('\n')
+  const html = `
+  <div style="font-family:'Nunito',-apple-system,Segoe UI,Roboto,sans-serif;max-width:520px;margin:0 auto;background:#f3f8f5;border-radius:20px;padding:24px">
+    <div style="font-size:44px;text-align:center">${food.emoji}</div>
+    <h1 style="text-align:center;color:#16241e;font-size:22px;margin:8px 0 4px">${esc(fam.baby_name)} tried ${esc(food.name)}!</h1>
+    <p style="text-align:center;color:#74857c;margin:0 0 16px">${esc(who)} logged it ${esc(when)}${esc(verdict)}</p>
+    ${t.notes ? `<div style="background:#fff6d9;border-radius:12px;padding:12px 14px;margin:0 0 12px;color:#16241e">📝 “${esc(t.notes)}”</div>` : ''}
+    <div style="background:#ffffff;border-radius:14px;padding:14px 16px;margin-bottom:10px">
+      <strong style="color:#0e9f6e">Why it's great</strong>
+      <p style="margin:6px 0 0;color:#16241e;line-height:1.5">${esc(food.nutrition)}</p>
+    </div>
+    <div style="background:#ffffff;border-radius:14px;padding:14px 16px;margin-bottom:10px">
+      <strong style="color:#0e9f6e">How to serve at ${esc(band.label)}</strong>
+      <p style="margin:6px 0 0;color:#16241e;line-height:1.5">${esc(food.serve[band.key])}</p>
+    </div>
+    ${food.allergen ? `<div style="background:#ffeee4;border-radius:14px;padding:12px 14px;margin-bottom:10px;color:#16241e">⚡ <strong>Common allergen</strong> — keep offering it regularly and watch for reactions.</div>` : ''}
+    <p style="text-align:center;margin:18px 0 0">
+      <a href="${APP_URL}" style="background:#0e9f6e;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px;display:inline-block">Open the journal</a>
+    </p>
+  </div>`
+  return { subject, text, html }
+}
+
+function notifyFamily(familyId, actorUserId, t) {
+  const fam = db.prepare('select baby_name, birthdate from families where id = ?').get(familyId)
+  const food = FOODS[t.foodId] || { name: t.foodId, emoji: '🥣', nutrition: '', serve: {}, allergen: null }
+  const who = t.by || 'Someone'
   if (emailEnabled) {
+    const { subject, text, html } = buildEmail(fam, food, t)
     const rows = db
       .prepare(
         `select u.email from members m join users u on u.id = m.user_id
          where m.family_id = ? and m.notify_email = 1 and m.user_id != ?`,
       )
       .all(familyId, actorUserId)
-    for (const r of rows) {
-      sendEmail(r.email, title, `${message}\n\nSee the full journal: ${APP_URL}`)
-    }
+    for (const r of rows) sendEmail(r.email, subject, text, html)
   }
   const pushRows = db
     .prepare(
@@ -181,7 +240,11 @@ function notifyFamily(familyId, actorUserId, message) {
        where m.family_id = ? and m.notify_push = 1 and m.user_id != ?`,
     )
     .all(familyId, actorUserId)
-  const payload = JSON.stringify({ title, body: message, url: APP_URL })
+  const payload = JSON.stringify({
+    title: `${food.emoji} ${fam.baby_name} tried ${food.name}!`,
+    body: `${who} logged it${t.rating ? ` — ${RATING_LABEL[t.rating] || t.rating}` : ''}`,
+    url: APP_URL,
+  })
   for (const r of pushRows) {
     webpush.sendNotification(JSON.parse(r.sub_json), payload).catch((e) => {
       // Expired or revoked subscription — drop it.
@@ -439,8 +502,13 @@ app.put('/api/tries', auth, requireFamily, (req, res) => {
   if (isNew) {
     const firstTimeFood = db.prepare('select count(*) as c from tries where family_id = ? and food_id = ?').get(req.familyId, String(t.foodId)).c === 1
     if (firstTimeFood) {
-      const who = t.by || req.myName || 'Someone'
-      notifyFamily(req.familyId, req.userId, `${who} logged a new first food: ${t.foodId.replace(/-/g, ' ')} (${t.date}).`)
+      notifyFamily(req.familyId, req.userId, {
+        foodId: String(t.foodId),
+        by: t.by || req.myName || 'Someone',
+        date: String(t.date),
+        rating: t.rating || null,
+        notes: String(t.notes || ''),
+      })
     }
   }
   res.json({ ok: true })
