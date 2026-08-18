@@ -644,6 +644,453 @@ export const FOODS = [
       12: 'Same — a daily sprinkle habit is an easy win.',
     },
   },
+  // ---------- MORE FRUITS ----------
+  {
+    id: 'raspberry', name: 'Raspberries', emoji: '🍓', category: 'fruit',
+    minAge: 6, allergen: null, hazard: 'low', ironRich: false,
+    nutrition: 'Fiber champion of the berry world, with vitamin C and antioxidants.',
+    serve: {
+      6: 'Soft enough to serve whole if large and ripe — or flatten each berry between your fingers. Mash into yogurt or oatmeal.',
+      9: 'Whole ripe berries (flattened if firm) for pincer practice.',
+      12: 'Whole or halved berries.',
+    },
+  },
+  {
+    id: 'blackberry', name: 'Blackberries', emoji: '🫐', category: 'fruit',
+    minAge: 6, allergen: null, hazard: 'moderate', ironRich: false,
+    hazardNote: 'Large firm blackberries can be a hazard — halve or flatten them.',
+    nutrition: 'Vitamin C, vitamin K and fiber.',
+    serve: {
+      6: 'Halve lengthwise or smash; fold mashed berries into oatmeal or yogurt.',
+      9: 'Halved or flattened berries.',
+      12: 'Halved berries; whole once chewing is strong.',
+    },
+  },
+  {
+    id: 'pineapple', name: 'Pineapple', emoji: '🍍', category: 'fruit',
+    minAge: 6, allergen: null, hazard: 'moderate', ironRich: false,
+    hazardNote: 'Fibrous and firm — serve thin, small or very ripe. Acidity can cause harmless mouth rash.',
+    nutrition: 'Vitamin C and manganese, plus bromelain (why your tongue tingles).',
+    serve: {
+      6: 'A large thin ring or long thin spear of very ripe pineapple to gnaw, or finely chopped into yogurt.',
+      9: 'Small thin pieces of ripe pineapple.',
+      12: 'Bite-size pieces.',
+    },
+  },
+  {
+    id: 'cantaloupe', name: 'Cantaloupe', emoji: '🍈', category: 'fruit',
+    minAge: 6, allergen: null, hazard: 'moderate', ironRich: false,
+    hazardNote: 'Firm melon chunks can break off in hard pieces — use ripe melon, sliced thin.',
+    nutrition: 'Beta-carotene and vitamin C in a hydrating package.',
+    serve: {
+      6: 'Thin wide slices of ripe melon (rind removed) or thick spears soft enough to smash between your fingers.',
+      9: 'Small bite-size pieces of ripe melon.',
+      12: 'Cubes or small wedges.',
+    },
+  },
+  {
+    id: 'plum', name: 'Plum', emoji: '🟣', category: 'fruit',
+    minAge: 6, allergen: null, hazard: 'moderate', ironRich: false,
+    hazardNote: 'Remove the pit; firm plums need cooking or very thin slicing.',
+    nutrition: 'Fiber and sorbitol — a gentle constipation helper.',
+    serve: {
+      6: 'Very ripe plum halves (pit removed, skin on for grip) to gnaw, or steam firm plums until soft.',
+      9: 'Ripe plum in bite-size pieces.',
+      12: 'Sliced ripe plum.',
+    },
+  },
+  {
+    id: 'apricot', name: 'Apricot', emoji: '🟠', category: 'fruit',
+    minAge: 6, allergen: null, hazard: 'moderate', ironRich: false,
+    hazardNote: 'Remove the pit. Dried apricots are sticky and chewy — chop finely if offered.',
+    nutrition: 'Beta-carotene and fiber; dried apricots are iron-dense (chop well).',
+    serve: {
+      6: 'Very ripe apricot halves, pit removed, or steamed until soft and mashed.',
+      9: 'Ripe pieces; finely chopped dried apricot softened in warm water.',
+      12: 'Sliced fresh, or finely chopped dried apricots.',
+    },
+  },
+  {
+    id: 'papaya', name: 'Papaya', emoji: '🧡', category: 'fruit',
+    minAge: 6, allergen: null, hazard: 'low', ironRich: false,
+    nutrition: 'Vitamin C, folate and digestive enzymes — famously gentle on tummies.',
+    serve: {
+      6: 'Thick spears of ripe papaya (roll in ground flax for grip) or mashed.',
+      9: 'Bite-size cubes of ripe papaya.',
+      12: 'Cubed or sliced.',
+    },
+  },
+  {
+    id: 'fig', name: 'Figs', emoji: '🟤', category: 'fruit',
+    minAge: 6, allergen: null, hazard: 'low', ironRich: false,
+    nutrition: 'Fiber, calcium and potassium; dried figs are concentrated sugar — fresh is better for babies.',
+    serve: {
+      6: 'Quarter a ripe fresh fig lengthwise, or mash the flesh into oatmeal.',
+      9: 'Quartered fresh figs or small pieces.',
+      12: 'Halved or quartered fresh figs; finely chopped dried figs.',
+    },
+  },
+  {
+    id: 'coconut', name: 'Coconut', emoji: '🥥', category: 'fruit',
+    minAge: 6, allergen: null, hazard: 'moderate', ironRich: false,
+    hazardNote: 'Raw coconut chunks are hard — use shredded, flaked or blended forms.',
+    nutrition: 'Rich fats for energy. Coconut milk and yogurt are great dairy-free bases.',
+    serve: {
+      6: 'Stir unsweetened coconut milk into oatmeal and curries, or finely shredded coconut into porridge.',
+      9: 'Fine shreds mixed into food; coconut yogurt.',
+      12: 'Shredded coconut on yogurt; small thin slivers of fresh coconut.',
+    },
+  },
+  {
+    id: 'pomegranate', name: 'Pomegranate', emoji: '🔴', category: 'fruit',
+    minAge: 9, allergen: null, hazard: 'high', ironRich: false,
+    hazardNote: 'Arils are small, round, firm and slippery — crush them for babies and young toddlers.',
+    nutrition: 'Antioxidants, vitamin C and fiber.',
+    serve: {
+      6: 'Best to wait, or offer only juice-crushed arils stirred into yogurt (seeds crushed flat).',
+      9: 'Crush each aril between your fingers before serving, or chop into yogurt.',
+      12: 'Crushed or halved arils; whole arils only when chewing is reliable (age 3–4).',
+    },
+  },
+  // ---------- MORE VEGETABLES ----------
+  {
+    id: 'asparagus', name: 'Asparagus', emoji: '🌱', category: 'vegetable',
+    minAge: 6, allergen: null, hazard: 'moderate', ironRich: false,
+    hazardNote: 'The fibrous stalk can shred into strings — cook until fully soft and trim woody ends.',
+    nutrition: 'Folate, vitamin K and prebiotic fiber (may make diapers smell funny — harmless).',
+    serve: {
+      6: 'Steam or roast thick spears until completely soft; baby holds the stalk and gnaws the tip.',
+      9: 'Soft-cooked spears cut into small pieces.',
+      12: 'Cooked pieces or whole soft spears.',
+    },
+  },
+  {
+    id: 'pumpkin', name: 'Pumpkin', emoji: '🎃', category: 'vegetable',
+    minAge: 6, allergen: null, hazard: 'low', ironRich: false,
+    nutrition: 'Beta-carotene, potassium and fiber, with a soft, spoonable texture.',
+    serve: {
+      6: 'Roast or steam wedges until very soft; serve spears or mash. Plain canned pumpkin stirred into oatmeal works too.',
+      9: 'Soft-cooked cubes or thick pumpkin mash.',
+      12: 'Cubes, mash, pumpkin pancakes or muffins.',
+    },
+  },
+  {
+    id: 'kale', name: 'Kale', emoji: '🥬', category: 'vegetable',
+    minAge: 6, allergen: null, hazard: 'low', ironRich: true,
+    nutrition: 'Vitamin K, vitamin C, calcium and some iron.',
+    serve: {
+      6: 'Cook until very tender and chop finely into eggs, mash, or blended sauces — raw leaves are too tough.',
+      9: 'Finely chopped cooked kale mixed into fritters, pasta, or scrambled eggs.',
+      12: 'Chopped cooked kale; crispy baked kale pieces for adventurous toddlers.',
+    },
+  },
+  {
+    id: 'cabbage', name: 'Cabbage', emoji: '🥬', category: 'vegetable',
+    minAge: 6, allergen: null, hazard: 'low', ironRich: false,
+    nutrition: 'Vitamin C and K, plus fiber. Expect some extra gas — normal.',
+    serve: {
+      6: 'Steam or braise until silky-soft and chop finely into mash or grain dishes.',
+      9: 'Soft-cooked, finely chopped or thin soft ribbons.',
+      12: 'Cooked ribbons; small amounts of finely shredded raw cabbage in soft slaws.',
+    },
+  },
+  {
+    id: 'brussels-sprouts', name: 'Brussels Sprouts', emoji: '🥬', category: 'vegetable',
+    minAge: 6, allergen: null, hazard: 'moderate', ironRich: false,
+    hazardNote: 'Whole sprouts are round and firm — always halve or quarter and cook soft.',
+    nutrition: 'Vitamin C, vitamin K, folate and fiber.',
+    serve: {
+      6: 'Steam or roast until very soft, then halve or quarter lengthwise.',
+      9: 'Quartered soft-cooked sprouts or chopped leaves.',
+      12: 'Halved roasted sprouts, cooked soft.',
+    },
+  },
+  {
+    id: 'eggplant', name: 'Eggplant', emoji: '🍆', category: 'vegetable',
+    minAge: 6, allergen: null, hazard: 'low', ironRich: false,
+    nutrition: 'Fiber and antioxidants; cooks down to a silky, easy-to-eat texture.',
+    serve: {
+      6: 'Roast or steam thick spears until collapsing-soft (skin removed if tough), or mash into baba ganoush-style dip.',
+      9: 'Soft-cooked pieces or eggplant dip on toast strips.',
+      12: 'Cooked pieces, in pasta or curries.',
+    },
+  },
+  {
+    id: 'onion', name: 'Onion', emoji: '🧅', category: 'vegetable',
+    minAge: 6, allergen: null, hazard: 'low', ironRich: false,
+    nutrition: 'Prebiotic fiber and flavor-building — teaches baby real food tastes.',
+    serve: {
+      6: 'Cook until fully soft and sweet (sautéed or roasted) and mix into any dish — rarely served alone.',
+      9: 'Well-cooked soft onion in eggs, sauces and stews.',
+      12: 'Cooked onion in anything; caramelized onion is usually a hit.',
+    },
+  },
+  {
+    id: 'garlic', name: 'Garlic', emoji: '🧄', category: 'vegetable',
+    minAge: 6, allergen: null, hazard: 'low', ironRich: false,
+    nutrition: 'Flavor and immune-supporting compounds. Babies can love garlic — season their food!',
+    serve: {
+      6: 'Cooked into dishes — sautéed with vegetables, in sauces, or roasted and mashed into spreads.',
+      9: 'Same — a seasoning, not a solo food.',
+      12: 'Cooked into family meals; roasted garlic spread on toast.',
+    },
+  },
+  {
+    id: 'celery', name: 'Celery', emoji: '🥬', category: 'vegetable',
+    minAge: 9, allergen: null, hazard: 'high', ironRich: false,
+    hazardNote: 'Raw celery is a classic choking hazard: hard, fibrous and stringy. Cook soft and de-string for babies.',
+    nutrition: 'Hydrating with vitamin K; mostly a texture-and-flavor food.',
+    serve: {
+      6: 'Best finely chopped and cooked soft into soups, stews and sauces.',
+      9: 'Soft-cooked, de-stringed small pieces in mixed dishes.',
+      12: 'Cooked pieces. Raw celery sticks stay off the menu until at least age 4.',
+    },
+  },
+  {
+    id: 'okra', name: 'Okra', emoji: '🟢', category: 'vegetable',
+    minAge: 6, allergen: null, hazard: 'low', ironRich: false,
+    nutrition: 'Fiber, vitamin C and folate; the natural sliminess actually helps babies swallow.',
+    serve: {
+      6: 'Steam or stew whole pods until soft; baby holds the pod and gnaws (remove the stem cap).',
+      9: 'Soft-cooked slices or chopped stewed okra.',
+      12: 'Stewed, roasted, or in gumbo-style dishes.',
+    },
+  },
+  {
+    id: 'parsnip', name: 'Parsnip', emoji: '🥕', category: 'vegetable',
+    minAge: 6, allergen: null, hazard: 'moderate', ironRich: false,
+    hazardNote: 'Like carrot: hard when raw or undercooked. Cook until a fork slides through.',
+    nutrition: 'Naturally sweet with fiber, folate and vitamin C.',
+    serve: {
+      6: 'Roast or steam thick sticks until very soft, or mash with butter.',
+      9: 'Soft-cooked bite-size pieces or continue soft sticks.',
+      12: 'Roasted pieces or mash.',
+    },
+  },
+  // ---------- MORE PROTEIN ----------
+  {
+    id: 'lamb', name: 'Lamb', emoji: '🐑', category: 'protein',
+    minAge: 6, allergen: null, hazard: 'moderate', ironRich: true,
+    hazardNote: 'Chunks are tough — serve slow-cooked and shredded, ground, or as a large strip to gnaw.',
+    nutrition: 'Exceptional iron and zinc — one of the best first meats.',
+    serve: {
+      6: 'A large strip of slow-cooked lamb to hold and suck, or finely shredded/ground lamb folded into mash.',
+      9: 'Ground lamb, soft meatballs or fine shreds.',
+      12: 'Small tender pieces, koftas, or shredded slow-cooked lamb.',
+    },
+  },
+  {
+    id: 'sardines', name: 'Sardines', emoji: '🐟', category: 'protein',
+    minAge: 6, allergen: 'fish', hazard: 'moderate', ironRich: true,
+    hazardNote: 'Check for larger bones; the soft tiny bones in canned sardines are safe and full of calcium.',
+    nutrition: 'Omega-3s, calcium, iron, vitamin D — tiny fish, huge nutrition, and very low mercury.',
+    serve: {
+      6: 'Mash canned sardines (in water, low-sodium) thoroughly, remove the spine, and spread on toast strips or mix into mash.',
+      9: 'Mashed or flaked sardines, sardine cakes.',
+      12: 'Flaked sardines on toast or pasta.',
+    },
+  },
+  {
+    id: 'tuna', name: 'Tuna', emoji: '🐟', category: 'protein',
+    minAge: 6, allergen: 'fish', hazard: 'low', ironRich: true,
+    nutrition: 'Protein and omega-3s. Choose light/skipjack tuna and keep to about once a week — albacore carries more mercury.',
+    serve: {
+      6: 'Mash canned light tuna (in water, no salt added) with avocado, yogurt or olive oil until moist and clumpy.',
+      9: 'Moist flaked tuna, tuna patties, or tuna-avocado mash on toast.',
+      12: 'Tuna salad, patties, or flaked into pasta.',
+    },
+  },
+  {
+    id: 'crab', name: 'Crab', emoji: '🦀', category: 'protein',
+    minAge: 6, allergen: 'shellfish', hazard: 'low', ironRich: true,
+    nutrition: 'Lean protein with zinc and B12. Shellfish allergen — introduce deliberately. Use real cooked crab, not imitation (high sodium).',
+    serve: {
+      6: 'Shred cooked crab meat finely (check for shell fragments) and mix into congee, mash or scrambled egg.',
+      9: 'Finely shredded crab in mixed dishes or soft crab cakes.',
+      12: 'Crab cakes or shredded crab.',
+    },
+  },
+  {
+    id: 'duck', name: 'Duck', emoji: '🦆', category: 'protein',
+    minAge: 6, allergen: null, hazard: 'moderate', ironRich: true,
+    hazardNote: 'Serve moist and shredded — dry slices are hard to manage.',
+    nutrition: 'Richer in iron than chicken, with plenty of healthy fat.',
+    serve: {
+      6: 'Slow-roasted duck finely shredded (skin removed) and folded into mash or rice.',
+      9: 'Moist shredded duck or small soft pieces.',
+      12: 'Shredded or diced tender duck.',
+    },
+  },
+  {
+    id: 'tempeh', name: 'Tempeh', emoji: '🟫', category: 'protein',
+    minAge: 6, allergen: 'soy', hazard: 'low', ironRich: true,
+    nutrition: 'Fermented soy with protein, iron and probiotics; firmer and nuttier than tofu.',
+    serve: {
+      6: 'Steam or simmer thick strips until soft (simmering mellows bitterness), or crumble finely into sauces.',
+      9: 'Soft-cooked strips or crumbles in mixed dishes.',
+      12: 'Pan-seared strips or crumbles in tacos and stir-fries.',
+    },
+  },
+  // ---------- MORE GRAINS ----------
+  {
+    id: 'barley', name: 'Barley', emoji: '🌾', category: 'grain',
+    minAge: 6, allergen: null, hazard: 'low', ironRich: false,
+    nutrition: 'Chewy whole grain with beta-glucan fiber. Contains gluten.',
+    serve: {
+      6: 'Cook pearl barley until very soft and fold into thick soups or mash — grains are too small to pick up alone.',
+      9: 'Soft-cooked barley in stews and grain bowls.',
+      12: 'Barley in soups, salads and pilafs.',
+    },
+  },
+  {
+    id: 'millet', name: 'Millet', emoji: '🌾', category: 'grain',
+    minAge: 6, allergen: null, hazard: 'low', ironRich: true,
+    nutrition: 'Gluten-free grain with iron, magnesium and B vitamins.',
+    serve: {
+      6: 'Cook into a soft porridge (like polenta) and serve on a preloaded spoon or as set, cooled wedges.',
+      9: 'Millet porridge, or millet cooked sticky and formed into small balls.',
+      12: 'Fluffy millet as a side, or porridge with fruit.',
+    },
+  },
+  {
+    id: 'couscous', name: 'Couscous', emoji: '🍚', category: 'grain',
+    minAge: 6, allergen: 'wheat', hazard: 'low', ironRich: false,
+    nutrition: 'Quick-cooking wheat pasta in tiny form. Whole-wheat versions add fiber.',
+    serve: {
+      6: 'Cook soft and moisten with olive oil or sauce so it clumps; baby scoops handfuls. Pearl couscous is easier to pick up.',
+      9: 'Moist couscous clumps or pearl couscous pieces.',
+      12: 'As a side, in salads and bowls.',
+    },
+  },
+  {
+    id: 'polenta', name: 'Polenta', emoji: '🌽', category: 'grain',
+    minAge: 6, allergen: null, hazard: 'low', ironRich: false,
+    nutrition: 'Gluten-free cornmeal comfort food; fortified versions add iron and B vitamins.',
+    serve: {
+      6: 'Soft warm polenta on a preloaded spoon, or chill until set and cut into soft strips.',
+      9: 'Set polenta fingers, lightly pan-warmed, or creamy polenta with spoon practice.',
+      12: 'Creamy polenta, polenta fries (baked soft), or under sauces.',
+    },
+  },
+  {
+    id: 'buckwheat', name: 'Buckwheat', emoji: '🌾', category: 'grain',
+    minAge: 6, allergen: null, hazard: 'low', ironRich: true,
+    nutrition: 'Despite the name, gluten-free and not wheat — a seed with complete protein, iron and magnesium.',
+    serve: {
+      6: 'Cook groats until very soft into porridge, or make soft buckwheat pancake strips.',
+      9: 'Soft kasha (cooked groats) in mixed dishes; pancake pieces.',
+      12: 'Buckwheat pancakes, kasha, soba noodles cut up.',
+    },
+  },
+  {
+    id: 'tortilla', name: 'Tortilla', emoji: '🫓', category: 'grain',
+    minAge: 6, allergen: 'wheat', hazard: 'moderate', ironRich: false,
+    hazardNote: 'Dry tortilla can gum into a wad — soften with a moist filling or warm it.',
+    nutrition: 'Corn tortillas are naturally gluten-free; flour tortillas count as a wheat exposure. Watch sodium.',
+    serve: {
+      6: 'Warm a low-sodium tortilla, spread with mashed avocado or hummus, roll tight and slice into pinwheel strips.',
+      9: 'Quesadilla strips with melted cheese and mashed beans.',
+      12: 'Small soft tacos, quesadilla triangles, pinwheels.',
+    },
+  },
+  // ---------- MORE DAIRY ----------
+  {
+    id: 'kefir', name: 'Kefir', emoji: '🥛', category: 'dairy',
+    minAge: 6, allergen: 'milk', hazard: 'low', ironRich: false,
+    nutrition: 'Drinkable yogurt with even more probiotic diversity. Choose plain, whole-milk kefir.',
+    serve: {
+      6: 'A splash in an open cup with help, stirred into oatmeal, or blended with fruit into a spoonable smoothie.',
+      9: 'Open-cup or straw-cup practice with small amounts; smoothie bowls.',
+      12: 'Small cups of plain kefir or fruit-blended kefir.',
+    },
+  },
+  {
+    id: 'ricotta', name: 'Ricotta', emoji: '🧀', category: 'dairy',
+    minAge: 6, allergen: 'milk', hazard: 'low', ironRich: false,
+    nutrition: 'Soft, naturally lower-sodium cheese with protein and calcium.',
+    serve: {
+      6: 'Spread on toast strips, dollop on a preloaded spoon, or fold into scrambled eggs and pasta.',
+      9: 'On toast, stirred into pasta, or by the spoonful.',
+      12: 'Ricotta pancakes, on toast with fruit, in lasagna.',
+    },
+  },
+  {
+    id: 'paneer', name: 'Paneer', emoji: '🧀', category: 'dairy',
+    minAge: 6, allergen: 'milk', hazard: 'moderate', ironRich: false,
+    hazardNote: 'Firm cubes can be a hazard — serve thin strips or crumbles, cooked soft.',
+    nutrition: 'Fresh, unsalted Indian cheese — high protein and naturally low sodium.',
+    serve: {
+      6: 'Soft-simmered thin strips (curries soften it beautifully), or crumbled into mash.',
+      9: 'Crumbled paneer or thin soft-cooked strips.',
+      12: 'Cubes simmered soft in mild curries, or thin pan-seared strips.',
+    },
+  },
+  // ---------- MORE LEGUMES ----------
+  {
+    id: 'white-beans', name: 'White Beans', emoji: '⚪', category: 'legume',
+    minAge: 6, allergen: null, hazard: 'moderate', ironRich: true,
+    hazardNote: 'Flatten or mash whole beans for young babies.',
+    nutrition: 'Creamy cannellini and navy beans bring iron, protein, calcium and fiber.',
+    serve: {
+      6: 'Mash low-sodium white beans with olive oil into a spread for toast strips, or fold into vegetable mash.',
+      9: 'Flattened whole beans for pincer practice, or white bean dip.',
+      12: 'Whole soft beans, in soups and pasta.',
+    },
+  },
+  {
+    id: 'kidney-beans', name: 'Kidney Beans', emoji: '🔴', category: 'legume',
+    minAge: 6, allergen: null, hazard: 'moderate', ironRich: true,
+    hazardNote: 'Flatten or mash for young babies. Always fully cooked (canned is fine) — never undercooked.',
+    nutrition: 'Iron, protein and folate with a hearty texture.',
+    serve: {
+      6: 'Mash well-cooked low-sodium kidney beans into a paste with a little olive oil or avocado.',
+      9: 'Flattened beans, or mashed into mild chili.',
+      12: 'Whole soft beans, mild chili, rice and beans.',
+    },
+  },
+  {
+    id: 'split-peas', name: 'Split Peas', emoji: '🟡', category: 'legume',
+    minAge: 6, allergen: null, hazard: 'low', ironRich: true,
+    nutrition: 'Cook down into a naturally smooth, iron-rich porridge — zero prep hazards.',
+    serve: {
+      6: 'Thick split pea dal or soup on a preloaded spoon, or thick enough to scoop by hand.',
+      9: 'Thick split pea stew with spoon practice; spread on toast.',
+      12: 'Split pea soup, dal with rice.',
+    },
+  },
+  // ---------- MORE NUTS & SEEDS ----------
+  {
+    id: 'cashew-butter', name: 'Cashew Butter', emoji: '🌰', category: 'nutseed',
+    minAge: 6, allergen: 'treenut', hazard: 'high', ironRich: true,
+    hazardNote: 'Same rules as all nut butters: thin it or spread paper-thin. Whole cashews unsafe until age 4+.',
+    nutrition: 'A distinct tree-nut exposure from almond — introduce separately. Iron, zinc and magnesium.',
+    serve: {
+      6: 'Thin smooth cashew butter with warm water into a drizzle for oatmeal or yogurt, or spread paper-thin on toast.',
+      9: 'Thin spreads and mix-ins, offered regularly.',
+      12: 'Thin spreads, cashew cream in sauces. No whole nuts until 4+.',
+    },
+  },
+  {
+    id: 'sunflower-butter', name: 'Sunflower Seed Butter', emoji: '🌻', category: 'nutseed',
+    minAge: 6, allergen: null, hazard: 'high', ironRich: true,
+    hazardNote: 'Thick seed butters clump like nut butters — always thin or spread paper-thin.',
+    nutrition: 'Nut-free spread with vitamin E, iron and healthy fats — great for nut-allergic families.',
+    serve: {
+      6: 'Thin with warm water and stir into oatmeal, or spread paper-thin on toast strips.',
+      9: 'Thin spreads and mix-ins.',
+      12: 'Thin spreads, in energy balls and baking.',
+    },
+  },
+  {
+    id: 'hemp-seeds', name: 'Hemp Seeds', emoji: '🌿', category: 'nutseed',
+    minAge: 6, allergen: null, hazard: 'low', ironRich: true,
+    nutrition: 'Soft, tiny hearts with complete protein, iron, and omega-3s — no grinding needed.',
+    serve: {
+      6: 'Sprinkle over yogurt and oatmeal, or use to add grip to slippery foods like banana and avocado.',
+      9: 'A daily sprinkle on almost anything.',
+      12: 'Sprinkled on meals, blended into smoothies.',
+    },
+  },
 ]
 
 export const AGE_BANDS = [

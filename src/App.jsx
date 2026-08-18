@@ -15,9 +15,19 @@ const HAZARD_META = {
   low: { label: 'Low choking risk', cls: 'hazard-low', icon: '✓' },
 }
 
+const MILESTONES = [
+  [100, '💯 ALL 100 FOODS! Your baby is officially a tiny gourmand. Incredible work!'],
+  [75, '🌟 75 foods — three quarters of the way. What a little foodie!'],
+  [50, '🎉 Halfway there — 50 foods tried!'],
+  [25, '🚀 25 foods down. You two are on a roll!'],
+  [10, '🥳 First 10 foods — the hardest part is behind you!'],
+  [1, '🎊 First food logged — the adventure begins!'],
+]
+
 export default function App() {
   const [profile, setProfile] = useLocalStorage('fb.profile', null)
   const [log, setLog] = useLocalStorage('fb.log', {}) // { foodId: [{date, rating, reaction, notes}] }
+  const [notes, setNotes] = useLocalStorage('fb.notes', {}) // { foodId: 'quick note' }
   const [tab, setTab] = useState('home')
   const [openFoodId, setOpenFoodId] = useState(null)
 
@@ -36,6 +46,31 @@ export default function App() {
       return copy
     })
   }
+  function checkOff(foodId) {
+    addTry(foodId, { date: todayISO(), rating: null, reaction: false, notes: '' })
+  }
+  function uncheck(foodId, foodName) {
+    const count = (log[foodId] || []).length
+    const msg =
+      count > 1
+        ? `Un-checking ${foodName} will delete all ${count} logged tries. Sure?`
+        : `Un-check ${foodName}?`
+    if (window.confirm(msg)) {
+      setLog((prev) => {
+        const copy = { ...prev }
+        delete copy[foodId]
+        return copy
+      })
+    }
+  }
+  function setNote(foodId, text) {
+    setNotes((prev) => {
+      const copy = { ...prev }
+      if (text.trim()) copy[foodId] = text
+      else delete copy[foodId]
+      return copy
+    })
+  }
 
   if (!profile) {
     return <Onboarding onDone={setProfile} />
@@ -51,24 +86,43 @@ export default function App() {
             food={openFood}
             band={band}
             entries={log[openFood.id] || []}
+            note={notes[openFood.id] || ''}
+            onSetNote={(t) => setNote(openFood.id, t)}
             onBack={() => setOpenFoodId(null)}
             onAddTry={(entry) => addTry(openFood.id, entry)}
             onRemoveTry={(i) => removeTry(openFood.id, i)}
           />
         ) : tab === 'home' ? (
-          <Home profile={profile} months={months} log={log} onOpenFood={setOpenFoodId} onGoFoods={() => setTab('foods')} />
+          <Home
+            profile={profile}
+            months={months}
+            log={log}
+            onOpenFood={setOpenFoodId}
+            onGoFoods={() => setTab('foods')}
+            onGoChecklist={() => setTab('first100')}
+          />
+        ) : tab === 'first100' ? (
+          <First100
+            log={log}
+            notes={notes}
+            onOpenFood={setOpenFoodId}
+            onCheck={checkOff}
+            onUncheck={uncheck}
+            onSetNote={setNote}
+          />
         ) : tab === 'foods' ? (
           <FoodBrowser log={log} months={months} onOpenFood={setOpenFoodId} />
         ) : tab === 'journal' ? (
           <Journal log={log} onOpenFood={setOpenFoodId} />
         ) : (
-          <Profile profile={profile} months={months} log={log} onSave={setProfile} onResetLog={() => setLog({})} />
+          <Profile profile={profile} months={months} log={log} notes={notes} onSave={setProfile} onResetLog={() => setLog({})} />
         )}
       </main>
 
       {!openFood && (
         <nav className="tabbar">
           <TabButton id="home" icon="🏠" label="Home" tab={tab} setTab={setTab} />
+          <TabButton id="first100" icon="✅" label="First 100" tab={tab} setTab={setTab} />
           <TabButton id="foods" icon="🍎" label="Foods" tab={tab} setTab={setTab} />
           <TabButton id="journal" icon="📖" label="Journal" tab={tab} setTab={setTab} />
           <TabButton id="baby" icon="👶" label="Baby" tab={tab} setTab={setTab} />
@@ -99,9 +153,9 @@ function Onboarding({ onDone }) {
         <div className="onboard-logo">🥣</div>
         <h1>First Bites</h1>
         <p className="muted">
-          Your free guide to starting solids: how to serve 50 foods safely by age, track what
-          your baby has tried, and introduce allergens with confidence. Everything stays on your
-          device — no account, no subscription, ever.
+          The first 100 foods, free forever: how to serve each one safely by age, a checklist to
+          tick off every new taste, and space for your notes. Everything stays on your device — no
+          account, no subscription, ever.
         </p>
         <label className="field">
           <span>Baby's name</span>
@@ -128,12 +182,136 @@ function Onboarding({ onDone }) {
   )
 }
 
+/* ---------- First 100 checklist ---------- */
+
+function First100({ log, notes, onOpenFood, onCheck, onUncheck, onSetNote }) {
+  const [editingNote, setEditingNote] = useState(null) // foodId being edited
+  const triedCount = FOODS.filter((f) => log[f.id]).length
+  const pct = Math.round((triedCount / FOODS.length) * 100)
+  const milestone = MILESTONES.find(([n]) => triedCount >= n)
+
+  return (
+    <div className="page">
+      <header>
+        <h1>The First 100 Foods</h1>
+        <p className="muted small">
+          Tick off every new food your baby tries. Tap a food's name for how to serve it safely.
+        </p>
+      </header>
+
+      <div className="card progress-card">
+        <div className="progress-nums">
+          <span className="progress-count">{triedCount}</span>
+          <span className="muted"> / 100 foods tried</span>
+        </div>
+        <div className="progress-track">
+          <div className="progress-fill" style={{ width: `${pct}%` }} />
+        </div>
+        {milestone && <p className="milestone">{milestone[1]}</p>}
+        {!milestone && <p className="muted small">Log the first food to start the streak! 🎊</p>}
+      </div>
+
+      {CATEGORIES.map((cat) => {
+        const foods = FOODS.filter((f) => f.category === cat.id)
+        const done = foods.filter((f) => log[f.id]).length
+        return (
+          <section key={cat.id} className="check-group">
+            <div className="check-group-head">
+              <h2>{cat.emoji} {cat.label}</h2>
+              <span className={`group-count ${done === foods.length ? 'complete' : ''}`}>
+                {done === foods.length ? '★ ' : ''}{done}/{foods.length}
+              </span>
+            </div>
+            {foods.map((f) => {
+              const tried = !!log[f.id]
+              const note = notes[f.id] || ''
+              const editing = editingNote === f.id
+              return (
+                <div key={f.id} className={`check-row card ${tried ? 'checked' : ''}`}>
+                  <div className="check-row-main">
+                    <button
+                      className={`checkbox ${tried ? 'on' : ''}`}
+                      aria-label={tried ? `Un-check ${f.name}` : `Check off ${f.name}`}
+                      onClick={() => (tried ? onUncheck(f.id, f.name) : onCheck(f.id))}
+                    >
+                      {tried ? '✓' : ''}
+                    </button>
+                    <button className="check-name" onClick={() => onOpenFood(f.id)}>
+                      <span className="check-emoji">{f.emoji}</span>
+                      <span className="check-title">
+                        {f.name}
+                        <span className="check-tags">
+                          {f.allergen && <span className="tag allergen">allergen</span>}
+                          {f.ironRich && <span className="tag iron">iron</span>}
+                          {f.hazard === 'high' && <span className="tag hazard-high">⚠️</span>}
+                        </span>
+                      </span>
+                    </button>
+                    <button
+                      className={`note-btn ${note ? 'has-note' : ''}`}
+                      aria-label={`Notes for ${f.name}`}
+                      onClick={() => setEditingNote(editing ? null : f.id)}
+                    >
+                      {note ? '📝' : '✏️'}
+                    </button>
+                  </div>
+                  {!editing && note && (
+                    <button className="note-preview" onClick={() => setEditingNote(f.id)}>
+                      {note}
+                    </button>
+                  )}
+                  {editing && (
+                    <NoteEditor
+                      initial={note}
+                      onDone={(text) => {
+                        onSetNote(f.id, text)
+                        setEditingNote(null)
+                      }}
+                    />
+                  )}
+                </div>
+              )
+            })}
+          </section>
+        )
+      })}
+
+      <p className="fineprint">
+        Checking a food logs a try dated today — add details (how it went, reactions) from the
+        food's page. Un-checking removes its logged tries.
+      </p>
+    </div>
+  )
+}
+
+function NoteEditor({ initial, onDone }) {
+  const [text, setText] = useState(initial)
+  return (
+    <div className="note-editor">
+      <textarea
+        rows={2}
+        autoFocus
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Loved it mashed with banana… broke out in a rash… gagged at first then asked for more…"
+      />
+      <div className="btn-row">
+        <button className="btn small-btn primary" onClick={() => onDone(text)}>Save note</button>
+        {initial && (
+          <button className="btn small-btn danger-outline" onClick={() => onDone('')}>Delete</button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 /* ---------- Home ---------- */
 
-function Home({ profile, months, log, onOpenFood, onGoFoods }) {
+function Home({ profile, months, log, onOpenFood, onGoFoods, onGoChecklist }) {
   const triedIds = Object.keys(log)
   const triedCount = triedIds.length
   const band = bandForAgeMonths(months)
+  const pct = Math.round((triedCount / FOODS.length) * 100)
 
   const allergensIntroduced = new Set(
     triedIds.map((id) => FOODS.find((f) => f.id === id)?.allergen).filter(Boolean),
@@ -168,11 +346,18 @@ function Home({ profile, months, log, onOpenFood, onGoFoods }) {
         </div>
       )}
 
-      <section className="stat-row">
-        <div className="stat card">
-          <div className="stat-num">{triedCount}</div>
-          <div className="stat-label">of {FOODS.length} foods tried</div>
+      <button className="card progress-card home-progress" onClick={onGoChecklist}>
+        <div className="progress-nums">
+          <span className="progress-count">{triedCount}</span>
+          <span className="muted"> / 100 first foods</span>
+          <span className="link" style={{ marginLeft: 'auto' }}>Open checklist →</span>
         </div>
+        <div className="progress-track">
+          <div className="progress-fill" style={{ width: `${pct}%` }} />
+        </div>
+      </button>
+
+      <section className="stat-row">
         <div className="stat card">
           <div className="stat-num">{allergensIntroduced.size}</div>
           <div className="stat-label">of 9 allergens introduced</div>
@@ -317,8 +502,9 @@ function FoodCard({ food, tried, onOpen }) {
 
 /* ---------- Food detail ---------- */
 
-function FoodDetail({ food, band, entries, onBack, onAddTry, onRemoveTry }) {
+function FoodDetail({ food, band, entries, note, onSetNote, onBack, onAddTry, onRemoveTry }) {
   const [showLogForm, setShowLogForm] = useState(false)
+  const [editingNote, setEditingNote] = useState(false)
   const hz = HAZARD_META[food.hazard]
   const cat = CATEGORIES.find((c) => c.id === food.category)
 
@@ -361,6 +547,30 @@ function FoodDetail({ food, band, entries, onBack, onAddTry, onRemoveTry }) {
 
       <section>
         <div className="section-head">
+          <h2>Your note</h2>
+          {!editingNote && (
+            <button className="link" onClick={() => setEditingNote(true)}>
+              {note ? 'Edit' : '+ Add note'}
+            </button>
+          )}
+        </div>
+        {editingNote ? (
+          <NoteEditor
+            initial={note}
+            onDone={(text) => {
+              onSetNote(text)
+              setEditingNote(false)
+            }}
+          />
+        ) : note ? (
+          <div className="card">{note}</div>
+        ) : (
+          <p className="muted small">A quick memo that also shows on the First 100 checklist.</p>
+        )}
+      </section>
+
+      <section>
+        <div className="section-head">
           <h2>Your tries ({entries.length})</h2>
           {!showLogForm && (
             <button className="btn primary" onClick={() => setShowLogForm(true)}>
@@ -388,7 +598,7 @@ function FoodDetail({ food, band, entries, onBack, onAddTry, onRemoveTry }) {
           return (
             <div key={idx} className="card try-entry">
               <div className="try-head">
-                <span>{rating?.emoji} {rating?.label}</span>
+                <span>{rating ? `${rating.emoji} ${rating.label}` : '✓ Tried'}</span>
                 <span className="muted small">{formatDate(e.date)}</span>
               </div>
               {e.reaction && <div className="reaction-flag">⚠️ Possible reaction noted</div>}
@@ -477,8 +687,8 @@ function Journal({ log, onOpenFood }) {
       </header>
       {entries.length === 0 && (
         <div className="card notice">
-          Nothing logged yet. Open any food and tap <strong>Log a try</strong> after mealtime —
-          future-you (and your pediatrician) will thank you.
+          Nothing logged yet. Check off a food on the <strong>First 100</strong> list or open any
+          food and tap <strong>Log a try</strong> — future-you (and your pediatrician) will thank you.
         </div>
       )}
       {entries.map((e, i) => {
@@ -488,7 +698,7 @@ function Journal({ log, onOpenFood }) {
             <span className="journal-emoji">{e.food.emoji}</span>
             <span className="journal-body">
               <span className="journal-title">
-                {e.food.name} {rating?.emoji}
+                {e.food.name} {rating ? rating.emoji : '✓'}
                 {e.reaction && ' ⚠️'}
               </span>
               {e.notes && <span className="muted small">{e.notes}</span>}
@@ -503,7 +713,7 @@ function Journal({ log, onOpenFood }) {
 
 /* ---------- Profile ---------- */
 
-function Profile({ profile, months, log, onSave, onResetLog }) {
+function Profile({ profile, months, log, notes, onSave, onResetLog }) {
   const [name, setName] = useState(profile.name)
   const [birthdate, setBirthdate] = useState(profile.birthdate)
   const [confirmReset, setConfirmReset] = useState(false)
@@ -511,7 +721,7 @@ function Profile({ profile, months, log, onSave, onResetLog }) {
   const dirty = name.trim() !== profile.name || birthdate !== profile.birthdate
 
   function exportData() {
-    const data = JSON.stringify({ profile, log }, null, 2)
+    const data = JSON.stringify({ profile, log, notes }, null, 2)
     const blob = new Blob([data], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -547,6 +757,20 @@ function Profile({ profile, months, log, onSave, onResetLog }) {
             Save changes
           </button>
         )}
+      </section>
+
+      <section className="card">
+        <h2>📱 Use it like an app</h2>
+        <p className="small">
+          First Bites installs straight from the browser — no App Store, no fees:
+        </p>
+        <p className="small">
+          <strong>iPhone:</strong> open in Safari → tap the Share button → <em>Add to Home Screen</em>.<br />
+          <strong>Android:</strong> open in Chrome → menu (⋮) → <em>Add to Home screen / Install app</em>.
+        </p>
+        <p className="small muted">
+          It gets its own icon, opens full-screen, and works offline.
+        </p>
       </section>
 
       <section className="card">
