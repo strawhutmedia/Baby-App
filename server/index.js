@@ -4,6 +4,7 @@
 import express from 'express'
 import cors from 'cors'
 import Database from 'better-sqlite3'
+import webpush from 'web-push'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -73,6 +74,31 @@ try {
 } catch {
   // column already exists
 }
+try {
+  db.exec(`alter table members add column notify_push integer not null default 0`)
+} catch {
+  // column already exists
+}
+db.exec(`
+create table if not exists push_subs (
+  endpoint text primary key,
+  user_id text not null references users(id) on delete cascade,
+  sub_json text not null,
+  created_at text not null default (datetime('now'))
+);
+`)
+
+// Web push (free, no third-party account): VAPID keys are generated once and
+// persisted next to the database so subscriptions survive restarts.
+const vapidPath = path.join(DATA_DIR, 'vapid.json')
+let vapid
+if (fs.existsSync(vapidPath)) {
+  vapid = JSON.parse(fs.readFileSync(vapidPath, 'utf8'))
+} else {
+  vapid = webpush.generateVAPIDKeys()
+  fs.writeFileSync(vapidPath, JSON.stringify(vapid))
+}
+webpush.setVapidDetails('mailto:hello@first100.baby', vapid.publicKey, vapid.privateKey)
 
 // ---------- helpers ----------
 const uid = () => crypto.randomUUID()
@@ -98,14 +124,14 @@ function makeJoinCode() {
 function memberOf(userId) {
   return db
     .prepare(
-      `select m.family_id, m.display_name, m.notify_email, m.role, f.join_code, f.baby_name, f.birthdate
+      `select m.family_id, m.display_name, m.notify_email, m.notify_push, m.role, f.join_code, f.baby_name, f.birthdate
        from members m join families f on f.id = m.family_id where m.user_id = ?`,
     )
     .get(userId)
 }
 function familyPayload(userId) {
   const m = memberOf(userId)
-  if (!m) return { family: null, members: [], myName: null, notifyEmail: false, myRole: null }
+  if (!m) return { family: null, members: [], myName: null, notifyEmail: false, notifyPush: false, myRole: null }
   const members = db
     .prepare(
       'select user_id as userId, display_name as displayName, notify_email as notifyEmail, role from members where family_id = ? order by role desc, display_name',
@@ -117,6 +143,7 @@ function familyPayload(userId) {
     members,
     myName: m.display_name,
     notifyEmail: Boolean(m.notify_email),
+    notifyPush: Boolean(m.notify_push),
     myRole: m.role,
   }
 }
@@ -135,16 +162,33 @@ async function sendEmail(to, subject, text) {
 }
 
 function notifyFamily(familyId, actorUserId, message) {
-  if (!emailEnabled) return
-  const rows = db
+  const fam = db.prepare('select baby_name from families where id = ?').get(familyId)
+  const title = `🥣 ${fam.baby_name} tried something new!`
+  if (emailEnabled) {
+    const rows = db
+      .prepare(
+        `select u.email from members m join users u on u.id = m.user_id
+         where m.family_id = ? and m.notify_email = 1 and m.user_id != ?`,
+      )
+      .all(familyId, actorUserId)
+    for (const r of rows) {
+      sendEmail(r.email, title, `${message}\n\nSee the full journal: ${APP_URL}`)
+    }
+  }
+  const pushRows = db
     .prepare(
-      `select u.email from members m join users u on u.id = m.user_id
-       where m.family_id = ? and m.notify_email = 1 and m.user_id != ?`,
+      `select p.endpoint, p.sub_json from members m join push_subs p on p.user_id = m.user_id
+       where m.family_id = ? and m.notify_push = 1 and m.user_id != ?`,
     )
     .all(familyId, actorUserId)
-  const fam = db.prepare('select baby_name from families where id = ?').get(familyId)
-  for (const r of rows) {
-    sendEmail(r.email, `🥣 ${fam.baby_name} tried something new!`, `${message}\n\nSee the full journal: ${APP_URL}`)
+  const payload = JSON.stringify({ title, body: message, url: APP_URL })
+  for (const r of pushRows) {
+    webpush.sendNotification(JSON.parse(r.sub_json), payload).catch((e) => {
+      // Expired or revoked subscription — drop it.
+      if (e.statusCode === 404 || e.statusCode === 410) {
+        db.prepare('delete from push_subs where endpoint = ?').run(r.endpoint)
+      }
+    })
   }
 }
 
@@ -222,7 +266,32 @@ app.put('/api/me', auth, requireFamily, (req, res) => {
       req.userId,
     )
   }
+  if (typeof req.body.notifyPush === 'boolean') {
+    db.prepare('update members set notify_push = ? where family_id = ? and user_id = ?').run(
+      req.body.notifyPush ? 1 : 0,
+      req.familyId,
+      req.userId,
+    )
+  }
   res.json(familyPayload(req.userId))
+})
+
+app.get('/api/push/key', (_req, res) => res.json({ publicKey: vapid.publicKey }))
+
+app.post('/api/push/subscribe', auth, (req, res) => {
+  const sub = req.body.subscription
+  if (!sub?.endpoint) return res.status(400).json({ error: 'Invalid push subscription' })
+  db.prepare(
+    `insert into push_subs (endpoint, user_id, sub_json) values (?, ?, ?)
+     on conflict(endpoint) do update set user_id=excluded.user_id, sub_json=excluded.sub_json`,
+  ).run(sub.endpoint, req.userId, JSON.stringify(sub))
+  res.json({ ok: true })
+})
+
+app.post('/api/push/unsubscribe', auth, (req, res) => {
+  const endpoint = String(req.body.endpoint || '')
+  db.prepare('delete from push_subs where endpoint = ? and user_id = ?').run(endpoint, req.userId)
+  res.json({ ok: true })
 })
 
 app.post('/api/family', auth, (req, res) => {

@@ -99,3 +99,47 @@ export const deleteTryById = (id) => call('DELETE', `/api/tries/${id}`)
 export const deleteTriesForFood = (foodId) => call('DELETE', `/api/tries/food/${foodId}`)
 
 export const pushNote = (foodId, body) => call('PUT', `/api/notes/${encodeURIComponent(foodId)}`, { body })
+
+// ---- push notifications ----
+
+function urlBase64ToUint8Array(base64) {
+  const padding = '='.repeat((4 - (base64.length % 4)) % 4)
+  const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const raw = window.atob(b64)
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)))
+}
+
+export const pushSupported = () =>
+  'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
+
+// Ask permission, subscribe this device, and register it with the family server.
+export async function enablePush() {
+  const permission = await Notification.requestPermission()
+  if (permission !== 'granted')
+    throw new Error('Notifications are blocked for this site — allow them in your browser settings first')
+  const reg = await navigator.serviceWorker.ready
+  const { publicKey } = await call('GET', '/api/push/key')
+  let sub = await reg.pushManager.getSubscription()
+  if (!sub) {
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey),
+    })
+  }
+  await call('POST', '/api/push/subscribe', { subscription: sub.toJSON() })
+  return updateMe({ notifyPush: true })
+}
+
+export async function disablePush() {
+  try {
+    const reg = await navigator.serviceWorker.ready
+    const sub = await reg.pushManager.getSubscription()
+    if (sub) {
+      await call('POST', '/api/push/unsubscribe', { endpoint: sub.endpoint })
+      await sub.unsubscribe()
+    }
+  } catch {
+    // device-side cleanup best-effort; the preference below is what stops sends
+  }
+  return updateMe({ notifyPush: false })
+}

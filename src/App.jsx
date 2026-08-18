@@ -248,6 +248,10 @@ export default function App() {
       const payload = await cloud.updateMe({ notifyEmail: value })
       setAccount((a) => a && { ...a, ...payload })
     },
+    onTogglePush: async (value) => {
+      const payload = value ? await cloud.enablePush() : await cloud.disablePush()
+      setAccount((a) => a && { ...a, ...payload })
+    },
     onRemoveMember: async (userId) => {
       const payload = await cloud.removeMember(userId)
       setAccount((a) => a && { ...a, ...payload })
@@ -1098,7 +1102,7 @@ function AddCaregiver({ onAdd }) {
 
 function FamilySection({
   account, emailEnabled, syncMsg,
-  onSignIn, onSignOut, onCreateFamily, onJoinFamily, onRename, onToggleNotify,
+  onSignIn, onSignOut, onCreateFamily, onJoinFamily, onRename, onToggleNotify, onTogglePush,
   onRemoveMember, onTransfer, onLeave,
 }) {
   const [busy, setBusy] = useState(false)
@@ -1216,16 +1220,40 @@ function FamilySection({
         </button>
       )}
       <RenameSelf current={account.myName} onRename={(n) => run(() => onRename(n))} />
-      {emailEnabled && (
-        <label className="check-field">
-          <input
-            type="checkbox"
-            checked={account.notifyEmail}
-            onChange={(e) => run(() => onToggleNotify(e.target.checked))}
-          />
-          <span>📬 Email me when someone logs a new first food</span>
-        </label>
-      )}
+      <div className="notify-block">
+        <h3 className="notify-head">Notifications</h3>
+        <p className="muted small">
+          Each person chooses their own — get pinged when someone else logs a new first food, or
+          keep it quiet.
+        </p>
+        {cloud.pushSupported() ? (
+          <label className="check-field">
+            <input
+              type="checkbox"
+              checked={account.notifyPush}
+              onChange={(e) => run(() => onTogglePush(e.target.checked))}
+              disabled={busy}
+            />
+            <span>📱 Notify this phone</span>
+          </label>
+        ) : (
+          <p className="muted small">
+            📱 Phone notifications: install the app first (Share → Add to Home Screen), then this
+            option appears here.
+          </p>
+        )}
+        {emailEnabled && (
+          <label className="check-field">
+            <input
+              type="checkbox"
+              checked={account.notifyEmail}
+              onChange={(e) => run(() => onToggleNotify(e.target.checked))}
+              disabled={busy}
+            />
+            <span>📬 Email me</span>
+          </label>
+        )}
+      </div>
       {(err || syncMsg) && <p className="small" style={{ color: 'var(--red)' }}>{err || syncMsg}</p>}
       <button className="link danger small" onClick={() => run(onSignOut)} disabled={busy}>
         Sign out on this device

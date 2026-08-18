@@ -410,6 +410,12 @@ p { margin: 0 0 8px; line-height: 1.5; }
 .member-name { font-weight: 700; font-size: 0.92rem; }
 .member-actions { display: flex; gap: 10px; }
 .tag.owner-tag { background: var(--grad); color: #fff; margin-left: 6px; }
+.notify-block {
+  border-top: 1px dashed var(--border);
+  margin-top: 10px;
+  padding-top: 10px;
+}
+.notify-head { font-size: 0.95rem; margin: 0 0 4px; }
 .join-code {
   font-size: 1.7rem;
   font-weight: 800;
