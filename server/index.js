@@ -14,13 +14,30 @@ const DATA_DIR = process.env.DATA_DIR || './data'
 const APP_URL = process.env.APP_URL || 'https://first100.baby'
 
 fs.mkdirSync(DATA_DIR, { recursive: true })
-const db = new Database(path.join(DATA_DIR, 'first-bites.db'))
-// During deploys the outgoing and incoming server briefly share the database;
-// wait for locks instead of crashing the boot. Must be set before any other
-// statement — journal_mode and the schema both take locks.
-db.pragma('busy_timeout = 15000')
-db.pragma('journal_mode = WAL')
-db.pragma('foreign_keys = ON')
+
+// During deploys the volume briefly hands over between the outgoing and
+// incoming container — retry the open instead of crashing the boot.
+function openDatabase() {
+  let lastErr
+  for (let attempt = 0; attempt < 15; attempt++) {
+    try {
+      const handle = new Database(path.join(DATA_DIR, 'first-bites.db'))
+      // Wait for locks instead of failing. Must be set before any other
+      // statement — journal_mode and the schema both take locks.
+      handle.pragma('busy_timeout = 15000')
+      handle.pragma('journal_mode = WAL')
+      handle.pragma('foreign_keys = ON')
+      return handle
+    } catch (e) {
+      lastErr = e
+      console.error(`database open attempt ${attempt + 1} failed: ${e.message} — retrying`)
+      const wait = Math.min(2000, 250 * (attempt + 1))
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, wait)
+    }
+  }
+  throw lastErr
+}
+const db = openDatabase()
 
 db.exec(`
 create table if not exists users (

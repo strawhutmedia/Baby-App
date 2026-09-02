@@ -3,8 +3,48 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#2f6b4f" />
-    <meta name="description" content="First Bites — a free baby-led weaning food guide and first-foods tracker." />
+    <meta name="theme-color" content="#0ea472" />
+    <meta
+      name="description"
+      content="Free baby first foods checklist: track your baby's first 100 foods with how-to-serve guides by age, choking-hazard safety, allergen introduction for all 9 common allergens, iron-rich food filters, and family sharing. No subscription, ever."
+    />
+    <link rel="canonical" href="https://first100.baby/" />
+
+    <!-- Social sharing -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="First Bites" />
+    <meta property="og:title" content="First Bites — Baby's First 100 Foods, Free" />
+    <meta
+      property="og:description"
+      content="The free first-100-foods checklist: serving guides by age, allergen introduction, iron-rich filters, and family tracking. No subscription, ever."
+    />
+    <meta property="og:url" content="https://first100.baby/" />
+    <meta property="og:image" content="https://first100.baby/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="First Bites — Baby's First 100 Foods, Free" />
+    <meta
+      name="twitter:description"
+      content="The free first-100-foods checklist: serving guides by age, allergen introduction, iron-rich filters, and family tracking."
+    />
+    <meta name="twitter:image" content="https://first100.baby/og.png" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "First Bites",
+        "alternateName": "Baby's First 100 Foods",
+        "url": "https://first100.baby/",
+        "description": "Free baby-led weaning companion: a first-100-foods checklist with age-based serving guides, choking-hazard safety notes, allergen introduction tracking for all 9 common allergens, iron-rich food filters, notes, and family accounts so parents and grandparents share one journal.",
+        "applicationCategory": "HealthApplication",
+        "operatingSystem": "Any",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "audience": { "@type": "PeopleAudience", "audienceType": "Parents of infants starting solid foods" }
+      }
+    </script>
+
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icon.svg" />
@@ -13,10 +53,22 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
-    <title>First Bites — Baby's First Foods</title>
+    <title>First Bites — Baby's First 100 Foods, Free Checklist &amp; Guide</title>
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <main style="max-width: 560px; margin: 40px auto; font-family: sans-serif; padding: 0 16px">
+        <h1>🥣 First Bites — Baby's First 100 Foods</h1>
+        <p>
+          A free baby-led weaning companion: tick off your baby's first 100 foods, see how to
+          serve each one safely by age (6–8, 9–11, and 12+ months), introduce all 9 common
+          allergens with confidence, find iron-rich foods fast, keep notes, and share one journal
+          with the whole family. No subscription, ever.
+        </p>
+        <p>First Bites needs JavaScript enabled to run.</p>
+      </main>
+    </noscript>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
