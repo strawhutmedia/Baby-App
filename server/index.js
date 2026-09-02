@@ -610,4 +610,23 @@ app.put('/api/notes/:foodId', auth, requireFamily, (req, res) => {
   res.json({ ok: true })
 })
 
-app.listen(PORT, () => console.log(`First Bites server on :${PORT} (data: ${DATA_DIR}, email: ${emailEnabled() ? 'on' : 'off'})`))
+const server = app.listen(PORT, () =>
+  console.log(`First Bites server on :${PORT} (data: ${DATA_DIR}, email: ${emailEnabled() ? 'on' : 'off'})`),
+)
+
+// Exit cleanly when Railway retires this container during a deploy — an
+// unhandled SIGTERM reads as a crash and emails the owner for nothing.
+function shutdown(signal) {
+  console.log(`${signal} received — shutting down cleanly`)
+  server.close(() => {
+    try {
+      db.close()
+    } catch {
+      // already closed
+    }
+    process.exit(0)
+  })
+  setTimeout(() => process.exit(0), 5000).unref()
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'))
+process.on('SIGINT', () => shutdown('SIGINT'))
