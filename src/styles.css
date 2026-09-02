@@ -175,6 +175,9 @@ p { margin: 0 0 8px; line-height: 1.5; }
   cursor: pointer;
 }
 .chip.active { background: var(--grad); border-color: transparent; color: #fff; box-shadow: 0 2px 8px rgba(14, 164, 114, 0.3); }
+.chip-divider { border-left: 1px solid var(--border); margin: 2px 4px; }
+.filter-tip { margin-top: 10px; font-size: 0.88rem; }
+.filter-tip .link { font-size: 0.88rem; padding: 0; }
 
 /* Search */
 .search {

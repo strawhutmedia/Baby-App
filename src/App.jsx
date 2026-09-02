@@ -562,7 +562,8 @@ function First100({ log, notes, onOpenFood, onCheck, onUncheck, onSetNote }) {
   const [editingNote, setEditingNote] = useState(null)
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('all')
-  const [filter, setFilter] = useState('all') // all | untried | tried | allergen | iron
+  const [status, setStatus] = useState('all') // all | untried | tried
+  const [tag, setTag] = useState('all') // all | iron | allergen — combinable with status
 
   const triedCount = FOODS.filter((f) => log[f.id]).length
   const pct = Math.round((triedCount / FOODS.length) * 100)
@@ -571,10 +572,10 @@ function First100({ log, notes, onOpenFood, onCheck, onUncheck, onSetNote }) {
   const matches = (f) => {
     if (query && !f.name.toLowerCase().includes(query.toLowerCase())) return false
     if (category !== 'all' && f.category !== category) return false
-    if (filter === 'untried' && log[f.id]) return false
-    if (filter === 'tried' && !log[f.id]) return false
-    if (filter === 'allergen' && !f.allergen) return false
-    if (filter === 'iron' && !f.ironRich) return false
+    if (status === 'untried' && log[f.id]) return false
+    if (status === 'tried' && !log[f.id]) return false
+    if (tag === 'allergen' && !f.allergen) return false
+    if (tag === 'iron' && !f.ironRich) return false
     return true
   }
 
@@ -620,12 +621,43 @@ function First100({ log, notes, onOpenFood, onCheck, onUncheck, onSetNote }) {
         ))}
       </div>
       <div className="chip-row">
-        <Chip active={filter === 'all'} onClick={() => setFilter('all')}>Everything</Chip>
-        <Chip active={filter === 'untried'} onClick={() => setFilter('untried')}>Not tried</Chip>
-        <Chip active={filter === 'tried'} onClick={() => setFilter('tried')}>Tried ✅</Chip>
-        <Chip active={filter === 'allergen'} onClick={() => setFilter('allergen')}>Allergens</Chip>
-        <Chip active={filter === 'iron'} onClick={() => setFilter('iron')}>Iron-rich</Chip>
+        <Chip active={status === 'all'} onClick={() => setStatus('all')}>Everything</Chip>
+        <Chip active={status === 'untried'} onClick={() => setStatus('untried')}>Not tried</Chip>
+        <Chip active={status === 'tried'} onClick={() => setStatus('tried')}>Tried ✅</Chip>
+        <span className="chip-divider" />
+        <Chip active={tag === 'iron'} onClick={() => setTag(tag === 'iron' ? 'all' : 'iron')}>💪 Iron-rich</Chip>
+        <Chip active={tag === 'allergen'} onClick={() => setTag(tag === 'allergen' ? 'all' : 'allergen')}>⚡ Allergens</Chip>
       </div>
+
+      {tag === 'iron' && (
+        <div className="card notice filter-tip">
+          💪 Great focus — babies' iron stores from birth run low around 6 months, so iron-rich
+          foods matter most right now. Aim for one at most meals; pairing with vitamin-C foods
+          (berries, citrus, tomato) helps absorption.
+          {status !== 'untried' && (
+            <>
+              {' '}
+              <button className="link" onClick={() => setStatus('untried')}>
+                Show only the ones left to try →
+              </button>
+            </>
+          )}
+        </div>
+      )}
+      {tag === 'allergen' && (
+        <div className="card notice filter-tip">
+          ⚡ These cover all 9 common allergens. Introduce one new allergen at a time, early in
+          the day, and keep each one in the rotation once it's gone well.
+          {status !== 'untried' && (
+            <>
+              {' '}
+              <button className="link" onClick={() => setStatus('untried')}>
+                Show only the ones left to try →
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {visibleCategories.length === 0 && (
         <p className="muted" style={{ marginTop: 16 }}>No foods match — try clearing the search or filters.</p>
