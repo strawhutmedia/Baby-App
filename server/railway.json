@@ -4,6 +4,7 @@
     "watchPatterns": ["server/**"]
   },
   "deploy": {
+    "startCommand": "node index.js",
     "healthcheckPath": "/api/health",
     "healthcheckTimeout": 120,
     "restartPolicyType": "ON_FAILURE",
