@@ -6,7 +6,7 @@
   "description": "Free baby-led weaning food guide and first-foods tracker",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/generate-food-pages.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

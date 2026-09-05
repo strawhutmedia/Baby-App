@@ -1272,6 +1272,9 @@ function Profile({
           Remember the golden rules: no honey before 12 months, no whole nuts before 4 years,
           always quarter grapes lengthwise, and baby should always be seated upright while eating.
         </p>
+        <p className="small">
+          <a className="link" href="/foods/">📖 Browse the full food guide (shareable pages)</a>
+        </p>
       </section>
     </div>
   )
