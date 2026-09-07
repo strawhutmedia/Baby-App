@@ -117,7 +117,12 @@ const setCfg = (k, v) =>
   db.prepare('insert into app_config (k, v) values (?, ?) on conflict(k) do update set v=excluded.v').run(k, v)
 const resendKey = () => getCfg('resend_key') || process.env.RESEND_API_KEY || ''
 const emailFrom = () => getCfg('email_from') || process.env.EMAIL_FROM || 'First Bites <updates@first100.baby>'
-const emailEnabled = () => Boolean(resendKey())
+// Amazon SES is preferred when its credentials are present; Resend stays as the
+// automatic fallback so email keeps working either way (reversible migration).
+const sesConfigured = () =>
+  Boolean((process.env.SES_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID) &&
+          (process.env.SES_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY))
+const emailEnabled = () => sesConfigured() || Boolean(resendKey())
 
 // Web push (free, no third-party account): VAPID keys are generated once and
 // persisted next to the database so subscriptions survive restarts.
@@ -188,6 +193,35 @@ async function sendEmail(to, subject, text, html) {
     return { ok: true, message: 'debug capture' }
   }
   if (!emailEnabled()) return { ok: false, message: 'Email is not connected yet' }
+  // Prefer Amazon SES when configured; fall back to Resend automatically.
+  if (sesConfigured()) {
+    try {
+      const { SESv2Client, SendEmailCommand } = await import('@aws-sdk/client-sesv2')
+      const client = new SESv2Client({
+        region: process.env.SES_REGION || process.env.AWS_REGION || 'us-east-1',
+        credentials: {
+          accessKeyId: process.env.SES_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID,
+          secretAccessKey: process.env.SES_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY,
+        },
+      })
+      await client.send(new SendEmailCommand({
+        FromEmailAddress: emailFrom(),
+        Destination: { ToAddresses: [to] },
+        ...(process.env.SES_CONFIG_SET ? { ConfigurationSetName: process.env.SES_CONFIG_SET } : {}),
+        Content: { Simple: {
+          Subject: { Data: subject, Charset: 'UTF-8' },
+          Body: {
+            ...(text ? { Text: { Data: text, Charset: 'UTF-8' } } : {}),
+            ...(html ? { Html: { Data: html, Charset: 'UTF-8' } } : {}),
+          },
+        } },
+      }))
+      return { ok: true, message: 'sent (ses)' }
+    } catch (e) {
+      console.error('SES email send failed:', e.message)
+      return { ok: false, message: e.message || 'SES send failed' }
+    }
+  }
   try {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
