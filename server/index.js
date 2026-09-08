@@ -208,6 +208,12 @@ async function sendEmail(to, subject, text, html) {
         FromEmailAddress: emailFrom(),
         Destination: { ToAddresses: [to] },
         ...(process.env.SES_CONFIG_SET ? { ConfigurationSetName: process.env.SES_CONFIG_SET } : {}),
+        // Tag every send so nothing shows up uncategorized (app=first100 + a
+        // rough type from the subject — login link vs. product update).
+        EmailTags: [
+          { Name: 'app', Value: 'first100' },
+          { Name: 'category', Value: /login|sign[- ]?in|magic/i.test(subject || '') ? 'login' : 'update' },
+        ],
         Content: { Simple: {
           Subject: { Data: subject, Charset: 'UTF-8' },
           Body: {
