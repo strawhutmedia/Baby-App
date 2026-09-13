@@ -271,6 +271,10 @@ p { margin: 0 0 8px; line-height: 1.5; }
   color: var(--ink);
 }
 .allergen-chip.done { background: var(--green-soft); border-color: var(--green); }
+.allergen-chip.partial { border-color: var(--green); }
+.allergen-chip.reacted { background: var(--red-soft); border-color: var(--red); }
+.allergen-dots { font-size: 0.78rem; letter-spacing: 2px; color: var(--green-deep); font-weight: 800; }
+.allergen-chip.reacted .allergen-dots { color: var(--red); letter-spacing: 0; }
 
 /* Journal */
 .journal-entry {

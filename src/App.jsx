@@ -839,32 +839,62 @@ function Home({ profile, months, log, onOpenFood, onGoChecklist }) {
   )
 }
 
+const ALLERGEN_TARGET = 3 // clean exposures on separate days before an allergen counts as established
+
 function AllergenTracker({ log, onOpenFood }) {
-  const triedIds = Object.keys(log)
+  // Exposures = distinct days this allergen was logged, across all foods carrying it.
+  function exposure(key) {
+    const days = new Set()
+    let reaction = false
+    for (const f of FOODS.filter((x) => x.allergen === key)) {
+      for (const e of log[f.id] || []) {
+        days.add(e.date)
+        if (e.reaction) reaction = true
+      }
+    }
+    return { count: days.size, reaction }
+  }
+
   return (
     <section>
       <h2>Allergen introduction</h2>
       <p className="muted small">
-        Pediatric guidance now favors introducing common allergens early (around 6 months) and
-        keeping them in the diet regularly. Introduce one new allergen at a time, early in the day,
-        and watch for reactions.
+        Introduce one allergen at a time, early in the day — then <strong>repeat it</strong>:
+        reactions can appear on the second or third taste, so aim for at least {ALLERGEN_TARGET}{' '}
+        clean exposures on different days, and keep tolerated allergens in the menu about weekly.
       </p>
       <div className="allergen-list">
         {Object.entries(ALLERGENS).map(([key, label]) => {
           const foods = FOODS.filter((f) => f.allergen === key)
-          const tried = foods.some((f) => triedIds.includes(f.id))
           const firstFood = foods[0]
+          const { count, reaction } = exposure(key)
+          const established = count >= ALLERGEN_TARGET
           return (
             <button
               key={key}
-              className={`allergen-chip ${tried ? 'done' : ''}`}
+              className={`allergen-chip ${reaction ? 'reacted' : established ? 'done' : count > 0 ? 'partial' : ''}`}
               onClick={() => firstFood && onOpenFood(firstFood.id)}
+              title={`${label}: ${count} exposure ${count === 1 ? 'day' : 'days'} logged`}
             >
-              {tried ? '✅' : '⬜'} {label}
+              {label}{' '}
+              {reaction ? (
+                <span className="allergen-dots">⚠️</span>
+              ) : established ? (
+                <span className="allergen-dots">✓ ×{count}</span>
+              ) : (
+                <span className="allergen-dots">
+                  {'●'.repeat(count)}
+                  {'○'.repeat(ALLERGEN_TARGET - count)}
+                </span>
+              )}
             </button>
           )
         })}
       </div>
+      <p className="muted small" style={{ marginTop: 6 }}>
+        Each dot is one day that allergen was logged. ⚠️ means a possible reaction was noted —
+        pause that allergen and talk to your pediatrician.
+      </p>
     </section>
   )
 }
