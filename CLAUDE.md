@@ -71,8 +71,11 @@ Railway server URL: `https://first-100-production-552d.up.railway.app` (baked in
 
 ## Open items / next-session candidates
 
-- **Google Search Console**: Ryan was given steps (DNS TXT verify + submit
-  sitemap.xml) — unknown if done; ask, and check indexing/impressions if so.
+- **Google Search Console**: set up and verified (Ryan receives GSC emails). Sept 23:
+  "Page with redirect" notice = expected/benign (http→https, www→apex, and
+  `/foods/x`→`/foods/x/` variants). All internal links, canonicals and the sitemap
+  already use `https://first100.baby/.../` with trailing slashes — nothing to fix.
+  Could still check indexing/impressions.
 - Fleet email-tagging audit for Podbooster/Slate/shows/sales was offered — needs
   their repos added to a session.
 - Ideas floated but not requested: analytics (privacy-friendly), "first 100 days"
